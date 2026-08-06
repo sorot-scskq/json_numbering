@@ -1,0 +1,620 @@
+<meta charset="utf-8">
+<title>JSONナンバリング</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  --paper:#dfe6ec;
+  --surface:#ffffff;
+  --ink:#0d1a26;
+  --ink2:#4d6274;
+  --ink3:#7d909f;
+  --rule:#bfcdd8;
+  --rule2:#e2e9ee;
+  --blue:#17457f;
+  --blue-soft:#e8f0fa;
+  --amber:#8a5300;
+  --amber-soft:#fdf3e0;
+  --red:#98191c;
+  --red-soft:#fbeaea;
+  --mono: ui-monospace,"SFMono-Regular","Cascadia Mono",Consolas,"Noto Sans Mono",monospace;
+  --sans: system-ui,-apple-system,"Segoe UI","Yu Gothic UI","Hiragino Sans","Noto Sans JP",Meiryo,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper);
+  background-image:
+    linear-gradient(to right, rgba(23,69,127,.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(23,69,127,.055) 1px, transparent 1px);
+  background-size:22px 22px;
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:14px;
+  line-height:1.6;
+  padding:20px 18px 80px;
+}
+.wrap{max-width:1400px;margin:0 auto}
+
+/* ---- header ---- */
+header{
+  background:var(--surface);
+  border:1px solid var(--rule);
+  border-top:3px solid var(--blue);
+  padding:18px 20px 16px;
+  display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end;
+  justify-content:space-between;
+}
+.brand h1{
+  margin:0;font-size:19px;font-weight:700;letter-spacing:.02em;
+}
+.brand p{margin:2px 0 0;color:var(--ink2);font-size:12.5px}
+.eyebrow{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--blue);font-weight:600;display:block;margin-bottom:2px;
+}
+.ctrls{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;color:var(--ink2);text-transform:uppercase}
+.field input[type=number]{
+  font-family:var(--mono);font-size:16px;width:110px;padding:7px 9px;
+  border:1px solid var(--rule);background:#fff;color:var(--ink);border-radius:2px;
+}
+.field input[type=number]:focus{outline:2px solid var(--blue);outline-offset:-1px;border-color:var(--blue)}
+
+button{
+  font-family:var(--sans);font-size:13px;font-weight:600;
+  padding:8px 14px;border-radius:2px;cursor:pointer;
+  border:1px solid var(--rule);background:#fff;color:var(--ink);
+}
+button:hover{background:#f3f7fa;border-color:var(--ink3)}
+button:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+button.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+button.primary:hover{background:#0f3462}
+button.mini{font-size:12px;padding:5px 10px;font-weight:500}
+
+/* ---- toolbar ---- */
+.toolbar{
+  background:var(--surface);border:1px solid var(--rule);border-top:0;
+  padding:10px 20px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+}
+.toolbar .sep{width:1px;height:22px;background:var(--rule2);margin:0 4px}
+.toolbar .hint{font-size:12px;color:var(--ink3);margin-left:auto}
+
+/* ---- grid ---- */
+.gridbox{
+  background:var(--surface);border:1px solid var(--rule);border-top:0;
+  overflow:auto;max-height:56vh;
+}
+table{border-collapse:separate;border-spacing:0;font-family:var(--mono);font-size:12.5px}
+thead th{
+  position:sticky;background:#f0f4f8;font-weight:600;color:var(--ink2);
+  border-right:1px solid var(--rule2);border-bottom:1px solid var(--rule);
+  padding:5px 8px;white-space:nowrap;text-align:left;
+}
+thead tr:first-child th{top:0;z-index:3;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--blue);background:#e6eef7;text-align:center}
+thead tr:last-child th{top:27px;z-index:3}
+thead th.grp{border-left:2px solid var(--rule)}
+tbody td{border-right:1px solid var(--rule2);border-bottom:1px solid var(--rule2);padding:0}
+tbody td.grp{border-left:2px solid var(--rule)}
+tbody input{
+  font-family:var(--mono);font-size:12.5px;
+  border:0;padding:5px 8px;width:100%;background:transparent;color:var(--ink);
+}
+tbody input:focus{outline:2px solid var(--blue);outline-offset:-2px;background:var(--blue-soft)}
+tbody input.cmt{width:190px}
+tbody input.n{width:74px;text-align:right}
+tbody input.bad{background:var(--red-soft);color:var(--red)}
+tbody tr.ghost input{color:var(--ink3)}
+tbody tr:hover td{background:#fafcfe}
+
+/* signature: CNO chain gutter */
+th.gut,td.gut{position:sticky;left:0;z-index:2;background:#f0f4f8;border-right:1px solid var(--rule)}
+thead th.gut{z-index:4}
+td.gut{background:#f7f9fb}
+.chain{display:flex;align-items:center;gap:6px;padding:3px 8px;white-space:nowrap}
+.chain .idx{color:var(--ink3);font-size:10.5px;width:20px;text-align:right}
+.chain .lnk{
+  font-size:11.5px;color:var(--blue);background:var(--blue-soft);
+  border:1px solid #cadcef;border-radius:2px;padding:1px 6px;letter-spacing:.02em;
+}
+.chain .lnk b{font-weight:700}
+.chain .lnk .prv{color:var(--ink3);font-weight:400}
+tr.ghost .chain .lnk{background:#f2f4f6;border-color:var(--rule2);color:var(--ink3)}
+tr.ghost .chain .lnk .prv{color:#b3bfc9}
+.chain .warn{color:var(--amber);font-size:14px;line-height:1;cursor:help}
+.chain .acts{display:flex;gap:0;margin-left:auto;opacity:.28;transition:opacity .12s}
+tr:hover .chain .acts,tr.focus .chain .acts,.chain .acts:focus-within{opacity:1}
+.chain button{
+  border:1px solid transparent;background:transparent;color:var(--ink2);
+  width:20px;height:20px;padding:0;font-size:12px;line-height:1;cursor:pointer;border-radius:2px;
+  display:flex;align-items:center;justify-content:center;
+}
+.chain button:hover{background:var(--blue-soft);border-color:#cadcef;color:var(--blue)}
+.chain button[data-act=del]:hover{background:var(--red-soft);border-color:#f0cdcd;color:var(--red)}
+.chain button:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+tr.focus td{background:#f5f9fd}
+tr.focus td.gut{background:#e9f1f9}
+
+/* ---- output ---- */
+.out{
+  background:var(--surface);border:1px solid var(--rule);border-top:0;
+}
+.out .bar{
+  padding:10px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+  border-bottom:1px solid var(--rule2);
+}
+.out .bar h2{margin:0;font-size:12.5px;font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--blue)}
+.out .bar .count{font-family:var(--mono);font-size:12px;color:var(--ink2)}
+.out .bar .right{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+label.chk{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--ink2);cursor:pointer}
+pre{
+  margin:0;padding:14px 20px;font-family:var(--mono);font-size:12.5px;line-height:1.55;
+  max-height:38vh;overflow:auto;white-space:pre;color:var(--ink);
+}
+.msgs{padding:0 20px}
+.msg{
+  font-size:12.5px;padding:7px 11px;margin:8px 0;border-radius:2px;border-left:3px solid;
+}
+.msg.warn{background:var(--amber-soft);border-color:var(--amber);color:var(--amber)}
+.msg.err{background:var(--red-soft);border-color:var(--red);color:var(--red)}
+
+/* ---- notes ---- */
+.notes{
+  margin-top:22px;background:var(--surface);border:1px solid var(--rule);padding:16px 20px;
+}
+.notes h3{margin:0 0 8px;font-size:12.5px;font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--blue)}
+.notes ol,.notes ul{margin:0 0 10px;padding-left:20px}
+.notes li{margin:3px 0;font-size:13px}
+.notes code{font-family:var(--mono);font-size:12px;background:#eef2f6;padding:1px 4px;border-radius:2px}
+.notes p{margin:6px 0;font-size:13px;color:var(--ink2)}
+
+.toast{
+  position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(12px);
+  background:var(--ink);color:#fff;font-size:13px;padding:10px 18px;border-radius:3px;
+  opacity:0;pointer-events:none;transition:opacity .18s, transform .18s;z-index:50;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+@media (max-width:640px){
+  body{padding:12px 10px 60px}
+  header,.toolbar,.out .bar{padding-left:12px;padding-right:12px}
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="brand">
+    <span class="eyebrow">Scenario &rarr; command.json</span>
+    <h1>JSONナンバリング</h1>
+    <p>1行＝1シナリオ。CNOを連番で振り、<code style="font-family:var(--mono)">command.json</code> を出力します。</p>
+  </div>
+  <div class="ctrls">
+    <div class="field">
+      <label for="startCno">CNO開始番号</label>
+      <input type="number" id="startCno" value="1" step="1">
+    </div>
+    <button class="primary" id="btnDownload">command.json を保存</button>
+  </div>
+</header>
+
+<div class="toolbar">
+  <button class="mini" id="btnAdd5">行を5つ追加</button>
+  <button class="mini" id="btnAdd1">行を1つ追加</button>
+  <div class="sep"></div>
+  <button class="mini" id="btnLoadTsv">Excelから読込（TSV/CSV）</button>
+  <button class="mini" id="btnSaveTsv">入力を保存（TSV）</button>
+  <div class="sep"></div>
+  <button class="mini" id="btnCopy">JSONをコピー</button>
+  <button class="mini" id="btnClear">全消去</button>
+  <span class="hint">Excelの範囲をコピーして、貼り付けたい先頭セルで Ctrl+V</span>
+  <input type="file" id="fileTsv" accept=".tsv,.csv,.txt" hidden>
+</div>
+
+<div class="gridbox">
+  <table id="grid">
+    <thead>
+      <tr id="hdrGroup"></tr>
+      <tr id="hdrCol"></tr>
+    </thead>
+    <tbody id="body"></tbody>
+  </table>
+</div>
+
+<div class="out">
+  <div class="bar">
+    <h2>出力プレビュー</h2>
+    <span class="count" id="count"></span>
+    <div class="right">
+      <label class="chk"><input type="checkbox" id="optBom" checked> BOM付きUTF-8（Excel版と同じ）</label>
+      <label class="chk"><input type="checkbox" id="optEsc"> Commentをエスケープ</label>
+    </div>
+  </div>
+  <div class="msgs" id="msgs"></div>
+  <pre id="preview"></pre>
+</div>
+
+<div class="notes">
+  <h3>使い方</h3>
+  <ol>
+    <li>表に値を入力する（Excelの<code>Data</code>シートと同じ並び）。</li>
+    <li>CNO開始番号を入れる。</li>
+    <li>「command.json を保存」を押す。</li>
+  </ol>
+  <h3 style="margin-top:14px">行の操作</h3>
+  <p>各行の左端にボタンがあります（行にカーソルを置くか、マウスを乗せると濃くなります）。CNOは行の並び順から毎回計算し直すので、挿入・複製・並べ替えのあとに振り直す作業は要りません。</p>
+  <ul>
+    <li><code>&#8593;+</code> 上に挿入 ／ <code>&#8595;+</code> 下に挿入 <span style="color:var(--ink3)">— Ctrl+Enter で下に、Ctrl+Shift+Enter で上に</span></li>
+    <li><code>&#10697;</code> 複製 <span style="color:var(--ink3)">— Ctrl+D。似たシナリオを1行だけ変えて足すとき用</span></li>
+    <li><code>&#9650;</code> <code>&#9660;</code> 1行ずつ移動 <span style="color:var(--ink3)">— Alt+&#8593; / Alt+&#8595;</span></li>
+    <li><code>&times;</code> 削除</li>
+  </ul>
+
+  <h3 style="margin-top:14px">マクロと揃えている挙動</h3>
+  <ul>
+    <li>出力対象は<b>Commentが入っている最後の行まで</b>。それ以降の行は、数値が入っていても出力されません。</li>
+    <li>途中のComment空欄行は<b>スキップされず</b><code>"Comment":""</code>として出力されます（左端に<span style="color:var(--amber)">▲</span>を表示）。</li>
+    <li>空欄の数値項目は <code>0</code> に置き換わります。</li>
+    <li><code>ACAF</code>が空欄なら <code>CoordCorrectInfo</code> は <code>{}</code> になります。</li>
+    <li>改行コードはCRLF、文字コードはBOM付きUTF-8。</li>
+  </ul>
+  <p>「Commentをエスケープ」は元マクロには無い追加分です。Commentに <code>"</code> や <code>\</code> を使うとマクロの出力はJSONとして壊れるので、必要なときだけ入れてください。</p>
+</div>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+var GROUPS = [
+  {name:"基本",              cols:["Comment"]},
+  {name:"RunInfo",           cols:["FUNCNO","FWD","TRN","KP","KI","KD","NOBLNCE"]},
+  {name:"SwitchInfo",        cols:["SCJFN","SCT","SCD","SCR","SCC","SCV","SCX","SCY"]},
+  {name:"CoordCorrectInfo",  cols:["ACAF","CAPX","CAPY","CAPR"]}
+];
+var COLS = GROUPS.reduce(function(a,g){return a.concat(g.cols)},[]); // 20列
+var NCOL = COLS.length;
+var INITIAL_ROWS = 12;
+
+var rows = [];
+function blankRow(){ var r=[]; for(var i=0;i<NCOL;i++) r.push(""); return r; }
+for (var i=0;i<INITIAL_ROWS;i++) rows.push(blankRow());
+
+var $ = function(id){ return document.getElementById(id); };
+var body=$("body"), preview=$("preview"), msgs=$("msgs"), countEl=$("count");
+var startCnoEl=$("startCno"), optBom=$("optBom"), optEsc=$("optEsc");
+
+/* ---------- ヘッダ ---------- */
+(function buildHead(){
+  var g=$("hdrGroup"), c=$("hdrCol");
+  g.innerHTML='<th class="gut" rowspan="2">CNO の連鎖</th>';
+  GROUPS.forEach(function(grp,gi){
+    var th=document.createElement("th");
+    th.colSpan=grp.cols.length; th.textContent=grp.name;
+    if(gi>0) th.className="grp";
+    g.appendChild(th);
+  });
+  var k=0;
+  GROUPS.forEach(function(grp,gi){
+    grp.cols.forEach(function(name,ci){
+      var th=document.createElement("th");
+      th.textContent=name;
+      if(gi>0&&ci===0) th.className="grp";
+      c.appendChild(th); k++;
+    });
+  });
+})();
+
+/* ---------- グリッド描画 ---------- */
+function renderGrid(focus){
+  var frag=document.createDocumentFragment();
+  rows.forEach(function(row,r){
+    var tr=document.createElement("tr");
+    tr.dataset.r=r;
+    var gut=document.createElement("td");
+    gut.className="gut";
+    gut.innerHTML='<div class="chain"><span class="idx"></span><span class="lnk"></span>'+
+                  '<span class="warn" title="Commentが空のまま出力されます" hidden>&#9650;</span>'+
+                  '<span class="acts">'+
+                    '<button type="button" data-act="above" title="この行の上に挿入">&#8593;&#43;</button>'+
+                    '<button type="button" data-act="below" title="この行の下に挿入 (Ctrl+Enter)">&#8595;&#43;</button>'+
+                    '<button type="button" data-act="dup"   title="この行を複製 (Ctrl+D)">&#10697;</button>'+
+                    '<button type="button" data-act="up"    title="1行上へ移動 (Alt+&#8593;)">&#9650;</button>'+
+                    '<button type="button" data-act="down"  title="1行下へ移動 (Alt+&#8595;)">&#9660;</button>'+
+                    '<button type="button" data-act="del"   title="この行を削除">&times;</button>'+
+                  '</span></div>';
+    tr.appendChild(gut);
+    var gi=0, ci=0;
+    for(var c2=0;c2<NCOL;c2++){
+      var td=document.createElement("td");
+      if(ci===0&&gi>0) td.className="grp";
+      var inp=document.createElement("input");
+      inp.type="text";
+      inp.className = (c2===0?"cmt":"n");
+      inp.value=row[c2];
+      inp.dataset.r=r; inp.dataset.c=c2;
+      inp.setAttribute("aria-label", COLS[c2]+" 行"+(r+1));
+      td.appendChild(inp); tr.appendChild(td);
+      ci++; if(ci>=GROUPS[gi].cols.length){gi++;ci=0;}
+    }
+    frag.appendChild(tr);
+  });
+  body.innerHTML=""; body.appendChild(frag);
+  if(focus){
+    var fr=Math.max(0,Math.min(rows.length-1,focus.r));
+    var el=body.querySelector('input[data-r="'+fr+'"][data-c="'+(focus.c||0)+'"]');
+    if(el){ el.focus(); if(focus.select) el.select(); }
+  }
+  refresh();
+}
+
+/* ---------- 行操作 ---------- */
+function currentRow(){
+  var a=document.activeElement;
+  if(a&&a.tagName==="INPUT"&&a.dataset.r!=null) return +a.dataset.r;
+  return null;
+}
+function insertAt(r){
+  rows.splice(r,0,blankRow());
+  renderGrid({r:r,c:0});
+  toast((r+1)+"行目に挿入しました");
+}
+function duplicateAt(r){
+  rows.splice(r+1,0,rows[r].slice());
+  renderGrid({r:r+1,c:0,select:true});
+  toast((r+1)+"行目を複製しました");
+}
+function moveRow(r,dir){
+  var n=r+dir;
+  if(n<0||n>=rows.length) return;
+  var tmp=rows[r]; rows[r]=rows[n]; rows[n]=tmp;
+  var c=currentRow()===r ? (+document.activeElement.dataset.c) : 0;
+  renderGrid({r:n,c:c});
+}
+function deleteAt(r){
+  rows.splice(r,1);
+  if(!rows.length) rows.push(blankRow());
+  renderGrid({r:Math.min(r,rows.length-1),c:0});
+}
+
+/* ---------- マクロ再現ロジック ---------- */
+function num(v){
+  var s = (v==null?"":String(v)).trim();
+  return s==="" ? "0" : s;
+}
+function esc(s){
+  return String(s).replace(/\\/g,"\\\\").replace(/"/g,'\\"')
+                  .replace(/\r/g,"\\r").replace(/\n/g,"\\n").replace(/\t/g,"\\t");
+}
+// lastRow = Cells(Rows.Count,1).End(xlUp).Row 相当
+function lastCommentIndex(){
+  for(var r=rows.length-1;r>=0;r--){ if(String(rows[r][0]).trim()!=="") return r; }
+  return -1;
+}
+function activeRows(){
+  var last=lastCommentIndex();
+  return last<0 ? [] : rows.slice(0,last+1);
+}
+function buildJson(){
+  var start = parseInt(startCnoEl.value,10); if(isNaN(start)) start=1;
+  var doEsc = optEsc.checked;
+  var act = activeRows();
+  var parts = act.map(function(row,i){
+    var cno=start+i, prv=cno-1;
+    var s="{";
+    s+='"Comment":"'+(doEsc?esc(row[0]):row[0])+'",\r\n';
+    s+='    "SNO":99,"CNO":'+cno+',"PRVSNO":99,"PRVCNO":'+prv+',\r\n';
+    s+='    "RunInfo":{"FUNCNO":'+num(row[1])+',"FWD":'+num(row[2])+',"TRN":'+num(row[3])+
+       ',"KP":'+num(row[4])+',"KI":'+num(row[5])+',"KD":'+num(row[6])+
+       ',"NOBLNCE":'+num(row[7])+'},\r\n';
+    s+='    "SwitchInfo":{"SCJFN":'+num(row[8])+',"SCT":'+num(row[9])+',"SCD":'+num(row[10])+
+       ',"SCR":'+num(row[11])+',"SCC":'+num(row[12])+',"SCV":'+num(row[13])+
+       ',"SCX":'+num(row[14])+',"SCY":'+num(row[15])+'},\r\n';
+    if(String(row[16]).trim()===""){
+      s+='    "CoordCorrectInfo":{}\r\n';
+    }else{
+      s+='    "CoordCorrectInfo":{"ACAF":'+num(row[16])+',"CAPX":'+num(row[17])+
+         ',"CAPY":'+num(row[18])+',"CAPR":'+num(row[19])+'}\r\n';
+    }
+    s+="}";
+    return s;
+  });
+  return "[\r\n"+parts.join(",\r\n")+"\r\n]";
+}
+
+/* ---------- 表示更新 ---------- */
+var NUMRE=/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+function refresh(){
+  var start=parseInt(startCnoEl.value,10); if(isNaN(start)) start=1;
+  var last=lastCommentIndex();
+  var trs=body.children;
+  for(var r=0;r<trs.length;r++){
+    var tr=trs[r], active = (last>=0 && r<=last);
+    var idx=tr.querySelector(".idx"), lnk=tr.querySelector(".lnk"), warn=tr.querySelector(".warn");
+    idx.textContent=String(r+1);
+    if(active){
+      var cno=start+r;
+      tr.classList.remove("ghost");
+      lnk.innerHTML='<span class="prv">'+(cno-1)+'&nbsp;&rarr;&nbsp;</span><b>'+cno+'</b>';
+      warn.hidden = String(rows[r][0]).trim()!=="";
+    }else{
+      tr.classList.add("ghost");
+      lnk.innerHTML='<span class="prv">—</span>';
+      warn.hidden=true;
+    }
+    var inps=tr.querySelectorAll("input");
+    for(var c=1;c<NCOL;c++){
+      var v=String(rows[r][c]).trim();
+      inps[c].classList.toggle("bad", active && v!=="" && !NUMRE.test(v));
+    }
+  }
+  var act=activeRows();
+  countEl.textContent = act.length ? act.length+" シナリオ / CNO "+start+"–"+(start+act.length-1) : "出力対象なし";
+  preview.textContent = buildJson().replace(/\r\n/g,"\n");
+  renderMsgs(act,last);
+}
+
+function renderMsgs(act,last){
+  var out=[];
+  if(!act.length){
+    out.push(["warn","Commentが1行も入っていません。Commentを入れた行までが出力対象です。"]);
+  }
+  var blanks=0, bads=[], quoted=0;
+  act.forEach(function(row,i){
+    if(String(row[0]).trim()==="") blanks++;
+    if(!optEsc.checked && /["\\]/.test(String(row[0]))) quoted++;
+    for(var c=1;c<NCOL;c++){
+      var v=String(row[c]).trim();
+      if(v!=="" && !NUMRE.test(v)) bads.push((i+1)+"行目 "+COLS[c]);
+    }
+  });
+  if(blanks) out.push(["warn",blanks+"行のCommentが空です。マクロと同じく、この行も \"Comment\":\"\" として出力されます。"]);
+  if(quoted) out.push(["err","Commentに \" か \\ が含まれています。このままではJSONとして壊れます。「Commentをエスケープ」を有効にしてください。"]);
+  if(bads.length) out.push(["err","数値以外が入っています（"+bads.slice(0,6).join("、")+(bads.length>6?" ほか"+(bads.length-6)+"件":"")+"）。JSONとして壊れます。"]);
+  msgs.innerHTML = out.map(function(m){
+    var d=document.createElement("div"); d.className="msg "+m[0]; d.textContent=m[1];
+    return d.outerHTML;
+  }).join("");
+}
+
+/* ---------- 入力 ---------- */
+body.addEventListener("input", function(e){
+  var t=e.target; if(t.tagName!=="INPUT") return;
+  rows[+t.dataset.r][+t.dataset.c]=t.value;
+  refresh();
+});
+body.addEventListener("click", function(e){
+  var btn=e.target.closest("button[data-act]"); if(!btn) return;
+  var r=+btn.closest("tr").dataset.r;
+  switch(btn.dataset.act){
+    case "above": insertAt(r);        break;
+    case "below": insertAt(r+1);      break;
+    case "dup":   duplicateAt(r);     break;
+    case "up":    moveRow(r,-1);      break;
+    case "down":  moveRow(r,1);       break;
+    case "del":   deleteAt(r);        break;
+  }
+});
+body.addEventListener("focusin", function(e){
+  var tr=e.target.closest("tr"); if(!tr) return;
+  var cur=body.querySelector("tr.focus");
+  if(cur&&cur!==tr) cur.classList.remove("focus");
+  tr.classList.add("focus");
+});
+startCnoEl.addEventListener("input", refresh);
+optEsc.addEventListener("change", refresh);
+
+/* 矢印/Enterでセル移動 */
+body.addEventListener("keydown", function(e){
+  var t=e.target; if(t.tagName!=="INPUT") return;
+  var r=+t.dataset.r, c=+t.dataset.c, dr=0, dc=0;
+  var mod = e.ctrlKey || e.metaKey;
+
+  if(mod && e.key==="Enter"){ e.preventDefault(); insertAt(e.shiftKey ? r : r+1); return; }
+  if(mod && (e.key==="d"||e.key==="D")){ e.preventDefault(); duplicateAt(r); return; }
+  if(e.altKey && (e.key==="ArrowUp"||e.key==="ArrowDown")){
+    e.preventDefault(); moveRow(r, e.key==="ArrowDown"?1:-1); return;
+  }
+  if(mod) return;
+
+  if(e.key==="Enter") dr = e.shiftKey?-1:1;
+  else if(e.key==="ArrowDown") dr=1;
+  else if(e.key==="ArrowUp") dr=-1;
+  else if(e.key==="ArrowLeft"  && t.selectionStart===0 && t.selectionEnd===0) dc=-1;
+  else if(e.key==="ArrowRight" && t.selectionStart===t.value.length && t.selectionEnd===t.value.length) dc=1;
+  else return;
+  var nr=r+dr, nc=c+dc;
+  if(nr<0||nr>=rows.length||nc<0||nc>=NCOL) return;
+  var next=body.querySelector('input[data-r="'+nr+'"][data-c="'+nc+'"]');
+  if(next){ e.preventDefault(); next.focus(); next.select(); }
+});
+
+/* Excelからの複数セル貼り付け */
+body.addEventListener("paste", function(e){
+  var t=e.target; if(t.tagName!=="INPUT") return;
+  var text=(e.clipboardData||window.clipboardData).getData("text");
+  if(!/[\t\r\n]/.test(text)) return; // 単一セルは通常動作
+  e.preventDefault();
+  spread(text, +t.dataset.r, +t.dataset.c);
+});
+function spread(text, r0, c0){
+  var lines=text.replace(/\r\n?/g,"\n").replace(/\n$/,"").split("\n");
+  lines.forEach(function(line,i){
+    var cells=line.split("\t");
+    var r=r0+i;
+    while(rows.length<=r) rows.push(blankRow());
+    cells.forEach(function(v,j){
+      var c=c0+j; if(c<NCOL) rows[r][c]=v;
+    });
+  });
+  renderGrid();
+  toast(lines.length+"行を貼り付けました");
+}
+
+/* ---------- ボタン ---------- */
+function addRows(n){ for(var i=0;i<n;i++) rows.push(blankRow()); renderGrid(); }
+$("btnAdd1").onclick=function(){addRows(1)};
+$("btnAdd5").onclick=function(){addRows(5)};
+$("btnClear").onclick=function(){
+  if(!confirm("入力内容をすべて消します。よろしいですか？")) return;
+  rows=[]; for(var i=0;i<INITIAL_ROWS;i++) rows.push(blankRow());
+  renderGrid(); toast("消去しました");
+};
+
+function download(name, text, bom, mime){
+  var parts = bom ? [new Uint8Array([0xEF,0xBB,0xBF]), text] : [text];
+  var url=URL.createObjectURL(new Blob(parts,{type:mime}));
+  var a=document.createElement("a"); a.href=url; a.download=name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){URL.revokeObjectURL(url)},1500);
+}
+$("btnDownload").onclick=function(){
+  if(!activeRows().length){ toast("Commentを1行以上入れてください"); return; }
+  download("command.json", buildJson(), optBom.checked, "application/json");
+  toast("command.json を保存しました");
+};
+$("btnCopy").onclick=function(){
+  navigator.clipboard.writeText(buildJson()).then(
+    function(){toast("JSONをコピーしました")},
+    function(){toast("コピーできませんでした。プレビューから手動で選択してください")}
+  );
+};
+$("btnSaveTsv").onclick=function(){
+  var body_ = rows.map(function(r){return r.join("\t")}).join("\r\n");
+  download("data.tsv", COLS.join("\t")+"\r\n"+body_, true, "text/tab-separated-values");
+  toast("data.tsv を保存しました");
+};
+$("btnLoadTsv").onclick=function(){ $("fileTsv").click() };
+$("fileTsv").onchange=function(e){
+  var f=e.target.files[0]; if(!f) return;
+  var fr=new FileReader();
+  fr.onload=function(){
+    var txt=String(fr.result).replace(/^\uFEFF/,"");
+    var sep = txt.indexOf("\t")>=0 ? "\t" : ",";
+    var lines=txt.replace(/\r\n?/g,"\n").replace(/\n+$/,"").split("\n");
+    if(lines.length && lines[0].split(sep)[0].trim()==="Comment") lines.shift();
+    rows=lines.map(function(line){
+      var cells=line.split(sep), r=blankRow();
+      for(var c=0;c<NCOL;c++) r[c]=(cells[c]||"").trim();
+      return r;
+    });
+    if(!rows.length) rows.push(blankRow());
+    renderGrid(); toast(rows.length+"行を読み込みました");
+  };
+  fr.readAsText(f,"utf-8");
+  e.target.value="";
+};
+
+var toastEl=$("toast"), toastT=null;
+function toast(m){
+  toastEl.textContent=m; toastEl.classList.add("show");
+  clearTimeout(toastT); toastT=setTimeout(function(){toastEl.classList.remove("show")},2200);
+}
+
+/* ---------- 起動 ---------- */
+rows[0][0]="aaa"; rows[0][1]="1"; rows[0][2]="1"; rows[0][3]="1"; rows[0][4]="1"; rows[0][5]="1";
+renderGrid();
+})();
+</script>
