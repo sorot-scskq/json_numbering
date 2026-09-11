@@ -191,6 +191,10 @@ pre{
   </div>
   <div class="ctrls">
     <div class="field">
+      <label for="sno">SNO</label>
+      <input type="number" id="sno" value="99" step="1">
+    </div>
+    <div class="field">
       <label for="startCno">CNO開始番号</label>
       <input type="number" id="startCno" value="1" step="1">
     </div>
@@ -238,7 +242,7 @@ pre{
   <h3>使い方</h3>
   <ol>
     <li>表に値を入力する（Excelの<code>Data</code>シートと同じ並び）。</li>
-    <li>CNO開始番号を入れる。</li>
+    <li>SNOとCNO開始番号を入れる（SNOは <code>SNO</code> と <code>PRVSNO</code> の両方に入ります。初期値は99）。</li>
     <li>「command.json を保存」を押す。</li>
   </ol>
   <h3 style="margin-top:14px">行の操作</h3>
@@ -284,7 +288,8 @@ for (var i=0;i<INITIAL_ROWS;i++) rows.push(blankRow());
 
 var $ = function(id){ return document.getElementById(id); };
 var body=$("body"), preview=$("preview"), msgs=$("msgs"), countEl=$("count");
-var startCnoEl=$("startCno"), optBom=$("optBom"), optEsc=$("optEsc");
+var startCnoEl=$("startCno"), snoEl=$("sno"), optBom=$("optBom"), optEsc=$("optEsc");
+function getSno(){ var v=parseInt(snoEl.value,10); return isNaN(v) ? 99 : v; }
 
 /* ---------- ヘッダ ---------- */
 (function buildHead(){
@@ -399,13 +404,14 @@ function activeRows(){
 }
 function buildJson(){
   var start = parseInt(startCnoEl.value,10); if(isNaN(start)) start=1;
+  var sno = getSno();
   var doEsc = optEsc.checked;
   var act = activeRows();
   var parts = act.map(function(row,i){
     var cno=start+i, prv=cno-1;
     var s="{";
     s+='"Comment":"'+(doEsc?esc(row[0]):row[0])+'",\r\n';
-    s+='    "SNO":99,"CNO":'+cno+',"PRVSNO":99,"PRVCNO":'+prv+',\r\n';
+    s+='    "SNO":'+sno+',"CNO":'+cno+',"PRVSNO":'+sno+',"PRVCNO":'+prv+',\r\n';
     s+='    "RunInfo":{"FUNCNO":'+num(row[1])+',"FWD":'+num(row[2])+',"TRN":'+num(row[3])+
        ',"KP":'+num(row[4])+',"KI":'+num(row[5])+',"KD":'+num(row[6])+
        ',"NOBLNCE":'+num(row[7])+'},\r\n';
@@ -451,7 +457,7 @@ function refresh(){
     }
   }
   var act=activeRows();
-  countEl.textContent = act.length ? act.length+" シナリオ / CNO "+start+"–"+(start+act.length-1) : "出力対象なし";
+  countEl.textContent = act.length ? act.length+" シナリオ / SNO "+getSno()+" / CNO "+start+"–"+(start+act.length-1) : "出力対象なし";
   preview.textContent = buildJson().replace(/\r\n/g,"\n");
   renderMsgs(act,last);
 }
@@ -504,6 +510,7 @@ body.addEventListener("focusin", function(e){
   tr.classList.add("focus");
 });
 startCnoEl.addEventListener("input", refresh);
+snoEl.addEventListener("input", refresh);
 optEsc.addEventListener("change", refresh);
 
 /* 矢印/Enterでセル移動 */
