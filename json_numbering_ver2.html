@@ -209,13 +209,13 @@ pre{
   <button class="mini" id="btnAdd5">行を5つ追加</button>
   <button class="mini" id="btnAdd1">行を1つ追加</button>
   <div class="sep"></div>
-  <button class="mini" id="btnLoadTsv">Excelから読込（TSV/CSV）</button>
+  <button class="mini" id="btnLoadTsv">ファイルから読込（TSV/CSV/JSON）</button>
   <button class="mini" id="btnSaveTsv">入力を保存（TSV）</button>
   <div class="sep"></div>
   <button class="mini" id="btnCopy">JSONをコピー</button>
   <button class="mini" id="btnClear">全消去</button>
   <span class="hint">Excelの範囲をコピーして、貼り付けたい先頭セルで Ctrl+V</span>
-  <input type="file" id="fileTsv" accept=".tsv,.csv,.txt" hidden>
+  <input type="file" id="fileTsv" accept=".tsv,.csv,.txt,.json" hidden>
 </div>
 
 <div class="gridbox">
@@ -248,6 +248,7 @@ pre{
     <li>SNO既定値とCNO開始番号を入れる。明細の<code>SNO</code>が空欄の行は既定値（初期値99）になります。</li>
     <li>「command.json を保存」を押す。</li>
   </ol>
+  <p>作成済みの <code>command.json</code> も「ファイルから読込」で読み込めます。SNOは各行に入り、CNO開始番号は先頭のCNOに合わせます。</p>
   <h3 style="margin-top:14px">行の操作</h3>
   <p>各行の左端にボタンがあります（行にカーソルを置くか、マウスを乗せると濃くなります）。CNOは行の並び順から毎回計算し直すので、挿入・複製・並べ替えのあとに振り直す作業は要りません。</p>
   <ul>
@@ -484,7 +485,8 @@ function refresh(){
   var act=activeRows();
   var snos=[];
   act.forEach(function(row){ var s=rowSno(row); if(snos.indexOf(s)<0) snos.push(s); });
-  countEl.textContent = act.length ? act.length+" シナリオ / SNO "+snos.join(", ")+" / CNO "+start+"–"+(start+act.length-1) : "出力対象なし";
+  var snoText = snos.length>5 ? snos.slice(0,5).join(", ")+" ほか"+(snos.length-5)+"種" : snos.join(", ");
+  countEl.textContent = act.length ? act.length+" シナリオ / SNO "+snoText+" / CNO "+start+"–"+(start+act.length-1) : "出力対象なし";
   preview.textContent = buildJson().replace(/\r\n/g,"\n");
   renderMsgs(act,last);
 }
@@ -621,12 +623,38 @@ $("btnSaveTsv").onclick=function(){
   download("data.tsv", COLS.join("\t")+"\r\n"+body_, true, "text/tab-separated-values");
   toast("data.tsv を保存しました");
 };
+// command.json\uFF08\u3053\u306E\u30C4\u30FC\u30EB\u3084\u30DE\u30AF\u30ED\u306E\u51FA\u529B\uFF09\u3092\u8868\u306B\u623B\u3059
+function loadJson(txt){
+  var list;
+  try{ list=JSON.parse(txt); }
+  catch(err){ toast("JSON\u3068\u3057\u3066\u8AAD\u3081\u307E\u305B\u3093\u3067\u3057\u305F\uFF08"+err.message+"\uFF09"); return; }
+  if(!Array.isArray(list)){ toast("JSON\u306E\u5F62\u5F0F\u304C\u9055\u3044\u307E\u3059\uFF08\u5148\u982D\u304C [ \u306E\u914D\u5217\u3067\u306F\u3042\u308A\u307E\u305B\u3093\uFF09"); return; }
+  function str(v){ return v==null ? "" : String(v); }
+  var start=list.length ? parseInt(list[0].CNO,10) : NaN, renum=false;
+  rows=list.map(function(item,i){
+    var r=blankRow(); item=item||{};
+    r[CI.SNO]=str(item.SNO);
+    r[CI.Comment]=str(item.Comment);
+    ["RunInfo","SwitchInfo","CoordCorrectInfo"].forEach(function(g){
+      var o=item[g]||{};
+      G[g].forEach(function(n){ r[CI[n]]=str(o[n]); });
+    });
+    if(item.CNO!==start+i) renum=true;
+    return r;
+  });
+  if(!rows.length) rows.push(blankRow());
+  if(!isNaN(start)) startCnoEl.value=start;
+  renderGrid();
+  toast(list.length+"\u4EF6\u306EJSON\u3092\u8AAD\u307F\u8FBC\u307F\u307E\u3057\u305F"+(renum?"\uFF08CNO\u306F\u9023\u756A\u306B\u632F\u308A\u76F4\u3057\u3066\u3044\u307E\u3059\uFF09":""));
+}
+
 $("btnLoadTsv").onclick=function(){ $("fileTsv").click() };
 $("fileTsv").onchange=function(e){
   var f=e.target.files[0]; if(!f) return;
   var fr=new FileReader();
   fr.onload=function(){
     var txt=String(fr.result).replace(/^\uFEFF/,"");
+    if(/^\s*\[/.test(txt)){ loadJson(txt); return; }
     var sep = txt.indexOf("\t")>=0 ? "\t" : ",";
     var lines=txt.replace(/\r\n?/g,"\n").replace(/\n+$/,"").split("\n");
     var map=COLS.map(function(_,c){ return c; });
