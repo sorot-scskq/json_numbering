@@ -1,0 +1,17 @@
+# テストを実行する（PR作成・更新時と、Pagesのデプロイ前）
+name: Test
+
+on:
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: node --test test/*.test.js
