@@ -110,7 +110,7 @@ tbody tr:hover td{background:#fafcfe}
 
 /* signature: CNO chain gutter */
 th.gut,td.gut{position:sticky;left:0;z-index:2;background:#f0f4f8;border-right:1px solid var(--rule)}
-thead th.gut{z-index:4}
+thead th.gut{z-index:4;padding-left:0;padding-right:0}
 td.gut{background:#f7f9fb}
 .chain{display:flex;align-items:center;gap:6px;padding:3px 8px;white-space:nowrap}
 .chain .idx{color:var(--ink3);font-size:10.5px;width:20px;text-align:right}
@@ -118,10 +118,12 @@ td.gut{background:#f7f9fb}
   font-size:11.5px;color:var(--blue);background:var(--blue-soft);
   border:1px solid #cadcef;border-radius:2px;padding:1px 6px;letter-spacing:.02em;
 }
-.chain .lnk b{font-weight:700}
-.chain .lnk .prv{color:var(--ink3);font-weight:400}
 tr.ghost .chain .lnk{background:#f2f4f6;border-color:var(--rule2);color:var(--ink3)}
-tr.ghost .chain .lnk .prv{color:#b3bfc9}
+.chain .sno{width:56px;flex:none;text-align:right}
+.chain input.sno{padding:2px 6px;border:1px solid var(--rule2);border-radius:2px}
+.chain .cno{width:44px;flex:none;text-align:right;font-weight:700}
+thead .chain{padding:0 8px}
+thead .chain .cno{font-weight:600}
 .chain .warn{color:var(--amber);font-size:14px;line-height:1;cursor:help}
 .chain .acts{display:flex;gap:0;margin-left:auto;opacity:.28;transition:opacity .12s}
 tr:hover .chain .acts,tr.focus .chain .acts,.chain .acts:focus-within{opacity:1}
@@ -275,12 +277,13 @@ pre{
 "use strict";
 
 var GROUPS = [
-  {name:"基本",              cols:["SNO","Comment"]},
+  {name:"基本",              cols:["Comment"]},
   {name:"RunInfo",           cols:["FUNCNO","FWD","TRN","KP","KI","KD","NOBLNCE"]},
   {name:"SwitchInfo",        cols:["SCJFN","SCT","SCD","SCR","SCC","SCV","SCX","SCY"]},
   {name:"CoordCorrectInfo",  cols:["ACAF","CAPX","CAPY","CAPR"]}
 ];
-var COLS = GROUPS.reduce(function(a,g){return a.concat(g.cols)},[]); // 21列
+var LEAD = ["SNO"];  // 左端の固定列に置く入力
+var COLS = LEAD.concat(GROUPS.reduce(function(a,g){return a.concat(g.cols)},[])); // 21列
 var NCOL = COLS.length;
 var CI = {};  // 列名 → 列番号
 COLS.forEach(function(n,i){ CI[n]=i; });
@@ -300,7 +303,9 @@ function getSno(){ var v=parseInt(snoEl.value,10); return isNaN(v) ? 99 : v; }
 /* ---------- ヘッダ ---------- */
 (function buildHead(){
   var g=$("hdrGroup"), c=$("hdrCol");
-  g.innerHTML='<th class="gut" rowspan="2">CNO の連鎖</th>';
+  g.innerHTML='<th class="gut" rowspan="2"><div class="chain">'+
+              '<span class="idx">#</span><span class="sno">SNO</span><span class="cno">CNO</span>'+
+              '</div></th>';
   GROUPS.forEach(function(grp,gi){
     var th=document.createElement("th");
     th.colSpan=grp.cols.length; th.textContent=grp.name;
@@ -326,7 +331,8 @@ function renderGrid(focus){
     tr.dataset.r=r;
     var gut=document.createElement("td");
     gut.className="gut";
-    gut.innerHTML='<div class="chain"><span class="idx"></span><span class="lnk"></span>'+
+    gut.innerHTML='<div class="chain"><span class="idx"></span>'+
+                  '<input type="text" class="sno"><span class="lnk cno"></span>'+
                   '<span class="warn" title="Commentが空のまま出力されます" hidden>&#9650;</span>'+
                   '<span class="acts">'+
                     '<button type="button" data-act="above" title="この行の上に挿入">&#8593;&#43;</button>'+
@@ -336,16 +342,20 @@ function renderGrid(focus){
                     '<button type="button" data-act="down"  title="1行下へ移動 (Alt+&#8595;)">&#9660;</button>'+
                     '<button type="button" data-act="del"   title="この行を削除">&times;</button>'+
                   '</span></div>';
+    var sno=gut.querySelector("input.sno");
+    sno.value=row[CI.SNO];
+    sno.placeholder=String(getSno());
+    sno.dataset.r=r; sno.dataset.c=CI.SNO;
+    sno.setAttribute("aria-label", "SNO 行"+(r+1));
     tr.appendChild(gut);
     var gi=0, ci=0;
-    for(var c2=0;c2<NCOL;c2++){
+    for(var c2=LEAD.length;c2<NCOL;c2++){
       var td=document.createElement("td");
       if(ci===0&&gi>0) td.className="grp";
       var inp=document.createElement("input");
       inp.type="text";
       inp.className = (c2===CI.Comment?"cmt":"n");
       inp.value=row[c2];
-      if(c2===CI.SNO) inp.placeholder=String(getSno());
       inp.dataset.r=r; inp.dataset.c=c2;
       inp.setAttribute("aria-label", COLS[c2]+" 行"+(r+1));
       td.appendChild(inp); tr.appendChild(td);
@@ -449,16 +459,18 @@ function refresh(){
   var trs=body.children;
   for(var r=0;r<trs.length;r++){
     var tr=trs[r], active = (last>=0 && r<=last);
-    var idx=tr.querySelector(".idx"), lnk=tr.querySelector(".lnk"), warn=tr.querySelector(".warn");
+    var idx=tr.querySelector(".idx"), cnoEl=tr.querySelector(".cno"), warn=tr.querySelector(".warn");
     idx.textContent=String(r+1);
     if(active){
       var cno=start+r;
       tr.classList.remove("ghost");
-      lnk.innerHTML='<span class="prv">'+(cno-1)+'&nbsp;&rarr;&nbsp;</span><b>'+cno+'</b>';
+      cnoEl.textContent=String(cno);
+      cnoEl.title="PRVSNO "+rowSno(rows[r>0 ? r-1 : r])+" / PRVCNO "+(cno-1);
       warn.hidden = String(rows[r][CI.Comment]).trim()!=="";
     }else{
       tr.classList.add("ghost");
-      lnk.innerHTML='<span class="prv">—</span>';
+      cnoEl.textContent="—";
+      cnoEl.title="出力対象外";
       warn.hidden=true;
     }
     var inps=tr.querySelectorAll("input");
