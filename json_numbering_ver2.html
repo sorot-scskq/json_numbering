@@ -103,6 +103,7 @@ tbody input{
 tbody input:focus{outline:2px solid var(--blue);outline-offset:-2px;background:var(--blue-soft)}
 tbody input.cmt{width:190px}
 tbody input.n{width:74px;text-align:right}
+tbody input::placeholder{color:var(--ink3)}
 tbody input.bad{background:var(--red-soft);color:var(--red)}
 tbody tr.ghost input{color:var(--ink3)}
 tbody tr:hover td{background:#fafcfe}
@@ -191,7 +192,7 @@ pre{
   </div>
   <div class="ctrls">
     <div class="field">
-      <label for="sno">SNO</label>
+      <label for="sno">SNO既定値</label>
       <input type="number" id="sno" value="99" step="1">
     </div>
     <div class="field">
@@ -241,8 +242,8 @@ pre{
 <div class="notes">
   <h3>使い方</h3>
   <ol>
-    <li>表に値を入力する（Excelの<code>Data</code>シートと同じ並び）。</li>
-    <li>SNOとCNO開始番号を入れる（SNOは <code>SNO</code> と <code>PRVSNO</code> の両方に入ります。初期値は99）。</li>
+    <li>表に値を入力する（<code>Comment</code>から右はExcelの<code>Data</code>シートと同じ並び。Excelの範囲は<code>Comment</code>のセルに貼り付けます）。</li>
+    <li>SNO既定値とCNO開始番号を入れる。明細の<code>SNO</code>が空欄の行は既定値（初期値99）になります。</li>
     <li>「command.json を保存」を押す。</li>
   </ol>
   <h3 style="margin-top:14px">行の操作</h3>
@@ -258,7 +259,8 @@ pre{
   <ul>
     <li>出力対象は<b>Commentが入っている最後の行まで</b>。それ以降の行は、数値が入っていても出力されません。</li>
     <li>途中のComment空欄行は<b>スキップされず</b><code>"Comment":""</code>として出力されます（左端に<span style="color:var(--amber)">▲</span>を表示）。</li>
-    <li>空欄の数値項目は <code>0</code> に置き換わります。</li>
+    <li>空欄の数値項目は <code>0</code> に置き換わります（<code>SNO</code>だけはSNO既定値）。</li>
+    <li><code>PRVSNO</code>は前の行の<code>SNO</code>（先頭行は自分の<code>SNO</code>）。<code>CNO</code>はSNOが変わっても連番のまま続きます。</li>
     <li><code>ACAF</code>が空欄なら <code>CoordCorrectInfo</code> は <code>{}</code> になります。</li>
     <li>改行コードはCRLF、文字コードはBOM付きUTF-8。</li>
   </ul>
@@ -273,13 +275,17 @@ pre{
 "use strict";
 
 var GROUPS = [
-  {name:"基本",              cols:["Comment"]},
+  {name:"基本",              cols:["SNO","Comment"]},
   {name:"RunInfo",           cols:["FUNCNO","FWD","TRN","KP","KI","KD","NOBLNCE"]},
   {name:"SwitchInfo",        cols:["SCJFN","SCT","SCD","SCR","SCC","SCV","SCX","SCY"]},
   {name:"CoordCorrectInfo",  cols:["ACAF","CAPX","CAPY","CAPR"]}
 ];
-var COLS = GROUPS.reduce(function(a,g){return a.concat(g.cols)},[]); // 20列
+var COLS = GROUPS.reduce(function(a,g){return a.concat(g.cols)},[]); // 21列
 var NCOL = COLS.length;
+var CI = {};  // 列名 → 列番号
+COLS.forEach(function(n,i){ CI[n]=i; });
+var G = {};   // グループ名 → 列名
+GROUPS.forEach(function(g){ G[g.name]=g.cols; });
 var INITIAL_ROWS = 12;
 
 var rows = [];
@@ -337,8 +343,9 @@ function renderGrid(focus){
       if(ci===0&&gi>0) td.className="grp";
       var inp=document.createElement("input");
       inp.type="text";
-      inp.className = (c2===0?"cmt":"n");
+      inp.className = (c2===CI.Comment?"cmt":"n");
       inp.value=row[c2];
+      if(c2===CI.SNO) inp.placeholder=String(getSno());
       inp.dataset.r=r; inp.dataset.c=c2;
       inp.setAttribute("aria-label", COLS[c2]+" 行"+(r+1));
       td.appendChild(inp); tr.appendChild(td);
@@ -363,25 +370,25 @@ function currentRow(){
 }
 function insertAt(r){
   rows.splice(r,0,blankRow());
-  renderGrid({r:r,c:0});
+  renderGrid({r:r,c:CI.Comment});
   toast((r+1)+"行目に挿入しました");
 }
 function duplicateAt(r){
   rows.splice(r+1,0,rows[r].slice());
-  renderGrid({r:r+1,c:0,select:true});
+  renderGrid({r:r+1,c:CI.Comment,select:true});
   toast((r+1)+"行目を複製しました");
 }
 function moveRow(r,dir){
   var n=r+dir;
   if(n<0||n>=rows.length) return;
   var tmp=rows[r]; rows[r]=rows[n]; rows[n]=tmp;
-  var c=currentRow()===r ? (+document.activeElement.dataset.c) : 0;
+  var c=currentRow()===r ? (+document.activeElement.dataset.c) : CI.Comment;
   renderGrid({r:n,c:c});
 }
 function deleteAt(r){
   rows.splice(r,1);
   if(!rows.length) rows.push(blankRow());
-  renderGrid({r:Math.min(r,rows.length-1),c:0});
+  renderGrid({r:Math.min(r,rows.length-1),c:CI.Comment});
 }
 
 /* ---------- マクロ再現ロジック ---------- */
@@ -395,34 +402,38 @@ function esc(s){
 }
 // lastRow = Cells(Rows.Count,1).End(xlUp).Row 相当
 function lastCommentIndex(){
-  for(var r=rows.length-1;r>=0;r--){ if(String(rows[r][0]).trim()!=="") return r; }
+  for(var r=rows.length-1;r>=0;r--){ if(String(rows[r][CI.Comment]).trim()!=="") return r; }
   return -1;
 }
 function activeRows(){
   var last=lastCommentIndex();
   return last<0 ? [] : rows.slice(0,last+1);
 }
+// 明細のSNO。空欄ならSNO既定値
+function rowSno(row){
+  var s=String(row[CI.SNO]).trim();
+  return s==="" ? String(getSno()) : s;
+}
+function fields(row,names){
+  return names.map(function(n){ return '"'+n+'":'+num(row[CI[n]]); }).join(",");
+}
 function buildJson(){
   var start = parseInt(startCnoEl.value,10); if(isNaN(start)) start=1;
-  var sno = getSno();
   var doEsc = optEsc.checked;
   var act = activeRows();
   var parts = act.map(function(row,i){
     var cno=start+i, prv=cno-1;
+    var sno=rowSno(row), prvsno=(i>0 ? rowSno(act[i-1]) : sno);
+    var cmt=row[CI.Comment];
     var s="{";
-    s+='"Comment":"'+(doEsc?esc(row[0]):row[0])+'",\r\n';
-    s+='    "SNO":'+sno+',"CNO":'+cno+',"PRVSNO":'+sno+',"PRVCNO":'+prv+',\r\n';
-    s+='    "RunInfo":{"FUNCNO":'+num(row[1])+',"FWD":'+num(row[2])+',"TRN":'+num(row[3])+
-       ',"KP":'+num(row[4])+',"KI":'+num(row[5])+',"KD":'+num(row[6])+
-       ',"NOBLNCE":'+num(row[7])+'},\r\n';
-    s+='    "SwitchInfo":{"SCJFN":'+num(row[8])+',"SCT":'+num(row[9])+',"SCD":'+num(row[10])+
-       ',"SCR":'+num(row[11])+',"SCC":'+num(row[12])+',"SCV":'+num(row[13])+
-       ',"SCX":'+num(row[14])+',"SCY":'+num(row[15])+'},\r\n';
-    if(String(row[16]).trim()===""){
+    s+='"Comment":"'+(doEsc?esc(cmt):cmt)+'",\r\n';
+    s+='    "SNO":'+sno+',"CNO":'+cno+',"PRVSNO":'+prvsno+',"PRVCNO":'+prv+',\r\n';
+    s+='    "RunInfo":{'+fields(row,G.RunInfo)+'},\r\n';
+    s+='    "SwitchInfo":{'+fields(row,G.SwitchInfo)+'},\r\n';
+    if(String(row[CI.ACAF]).trim()===""){
       s+='    "CoordCorrectInfo":{}\r\n';
     }else{
-      s+='    "CoordCorrectInfo":{"ACAF":'+num(row[16])+',"CAPX":'+num(row[17])+
-         ',"CAPY":'+num(row[18])+',"CAPR":'+num(row[19])+'}\r\n';
+      s+='    "CoordCorrectInfo":{'+fields(row,G.CoordCorrectInfo)+'}\r\n';
     }
     s+="}";
     return s;
@@ -444,20 +455,24 @@ function refresh(){
       var cno=start+r;
       tr.classList.remove("ghost");
       lnk.innerHTML='<span class="prv">'+(cno-1)+'&nbsp;&rarr;&nbsp;</span><b>'+cno+'</b>';
-      warn.hidden = String(rows[r][0]).trim()!=="";
+      warn.hidden = String(rows[r][CI.Comment]).trim()!=="";
     }else{
       tr.classList.add("ghost");
       lnk.innerHTML='<span class="prv">—</span>';
       warn.hidden=true;
     }
     var inps=tr.querySelectorAll("input");
-    for(var c=1;c<NCOL;c++){
+    inps[CI.SNO].placeholder=String(getSno());
+    for(var c=0;c<NCOL;c++){
+      if(c===CI.Comment) continue;
       var v=String(rows[r][c]).trim();
       inps[c].classList.toggle("bad", active && v!=="" && !NUMRE.test(v));
     }
   }
   var act=activeRows();
-  countEl.textContent = act.length ? act.length+" シナリオ / SNO "+getSno()+" / CNO "+start+"–"+(start+act.length-1) : "出力対象なし";
+  var snos=[];
+  act.forEach(function(row){ var s=rowSno(row); if(snos.indexOf(s)<0) snos.push(s); });
+  countEl.textContent = act.length ? act.length+" シナリオ / SNO "+snos.join(", ")+" / CNO "+start+"–"+(start+act.length-1) : "出力対象なし";
   preview.textContent = buildJson().replace(/\r\n/g,"\n");
   renderMsgs(act,last);
 }
@@ -469,9 +484,10 @@ function renderMsgs(act,last){
   }
   var blanks=0, bads=[], quoted=0;
   act.forEach(function(row,i){
-    if(String(row[0]).trim()==="") blanks++;
-    if(!optEsc.checked && /["\\]/.test(String(row[0]))) quoted++;
-    for(var c=1;c<NCOL;c++){
+    if(String(row[CI.Comment]).trim()==="") blanks++;
+    if(!optEsc.checked && /["\\]/.test(String(row[CI.Comment]))) quoted++;
+    for(var c=0;c<NCOL;c++){
+      if(c===CI.Comment) continue;
       var v=String(row[c]).trim();
       if(v!=="" && !NUMRE.test(v)) bads.push((i+1)+"行目 "+COLS[c]);
     }
@@ -601,10 +617,16 @@ $("fileTsv").onchange=function(e){
     var txt=String(fr.result).replace(/^\uFEFF/,"");
     var sep = txt.indexOf("\t")>=0 ? "\t" : ",";
     var lines=txt.replace(/\r\n?/g,"\n").replace(/\n+$/,"").split("\n");
-    if(lines.length && lines[0].split(sep)[0].trim()==="Comment") lines.shift();
+    var map=COLS.map(function(_,c){ return c; });
+    var head=lines.length ? lines[0].split(sep).map(function(s){ return s.trim(); }) : [];
+    if(head.indexOf("Comment")>=0){
+      // 見出し行があれば列名で対応付ける（SNO列の無い旧形式もそのまま読める）
+      lines.shift();
+      map=COLS.map(function(n){ return head.indexOf(n); });
+    }
     rows=lines.map(function(line){
       var cells=line.split(sep), r=blankRow();
-      for(var c=0;c<NCOL;c++) r[c]=(cells[c]||"").trim();
+      for(var c=0;c<NCOL;c++) r[c]= map[c]<0 ? "" : (cells[map[c]]||"").trim();
       return r;
     });
     if(!rows.length) rows.push(blankRow());
@@ -621,7 +643,8 @@ function toast(m){
 }
 
 /* ---------- 起動 ---------- */
-rows[0][0]="aaa"; rows[0][1]="1"; rows[0][2]="1"; rows[0][3]="1"; rows[0][4]="1"; rows[0][5]="1";
+rows[0][CI.Comment]="aaa";
+["FUNCNO","FWD","TRN","KP","KI"].forEach(function(n){ rows[0][CI[n]]="1"; });
 renderGrid();
 })();
 </script>
