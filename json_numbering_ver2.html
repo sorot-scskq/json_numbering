@@ -114,16 +114,13 @@ thead th.gut{z-index:4;padding-left:0;padding-right:0}
 td.gut{background:#f7f9fb}
 .chain{display:flex;align-items:center;gap:6px;padding:3px 8px;white-space:nowrap}
 .chain .idx{color:var(--ink3);font-size:10.5px;width:20px;text-align:right}
-.chain .lnk{
-  font-size:11.5px;color:var(--blue);background:var(--blue-soft);
-  border:1px solid #cadcef;border-radius:2px;padding:1px 6px;letter-spacing:.02em;
-}
-tr.ghost .chain .lnk{background:#f2f4f6;border-color:var(--rule2);color:var(--ink3)}
 .chain .sno{width:56px;flex:none;text-align:right}
-.chain input.sno{padding:2px 6px;border:1px solid var(--rule2);border-radius:2px}
-.chain .cno{width:44px;flex:none;text-align:right;font-weight:700}
+.chain .cno{width:52px;flex:none;text-align:right}
+.chain input.sno,.chain input.cno{padding:2px 6px;border:1px solid var(--rule2);border-radius:2px}
+/* CNOは入力した値を太字、自動で振った値（プレースホルダー）を薄字で出す */
+.chain input.cno{font-weight:700}
+.chain input.cno::placeholder{font-weight:400}
 thead .chain{padding:0 8px}
-thead .chain .cno{font-weight:600}
 .chain .warn{color:var(--amber);font-size:14px;line-height:1;cursor:help}
 .chain .acts{display:flex;gap:0;margin-left:auto;opacity:.28;transition:opacity .12s}
 tr:hover .chain .acts,tr.focus .chain .acts,.chain .acts:focus-within{opacity:1}
@@ -245,12 +242,12 @@ pre{
   <h3>使い方</h3>
   <ol>
     <li>表に値を入力する（<code>Comment</code>から右はExcelの<code>Data</code>シートと同じ並び。Excelの範囲は<code>Comment</code>のセルに貼り付けます）。</li>
-    <li>SNO既定値とCNO開始番号を入れる。明細の<code>SNO</code>が空欄の行は既定値（初期値99）になります。</li>
+    <li>SNO既定値とCNO開始番号を入れる。明細の<code>SNO</code>・<code>CNO</code>が空欄の行は自動で決まります（SNOは既定値、CNOは前の行＋1。先頭行はCNO開始番号）。</li>
     <li>「command.json を保存」を押す。</li>
   </ol>
-  <p>作成済みの <code>command.json</code> も「ファイルから読込」で読み込めます。SNOは各行に入り、CNO開始番号は先頭のCNOに合わせます。</p>
+  <p>作成済みの <code>command.json</code> も「ファイルから読込」で読み込めます。SNO・CNOは読み込んだ値のまま各行に入ります。<code>PRVSNO</code>・<code>PRVCNO</code>は出力時に前の行から計算し直すので、ファイルの値と合わない行があれば読込時にお知らせします。</p>
   <h3 style="margin-top:14px">行の操作</h3>
-  <p>各行の左端にボタンがあります（行にカーソルを置くか、マウスを乗せると濃くなります）。CNOは行の並び順から毎回計算し直すので、挿入・複製・並べ替えのあとに振り直す作業は要りません。</p>
+  <p>各行の左端にボタンがあります（行にカーソルを置くか、マウスを乗せると濃くなります）。CNOが空欄の行は前の行＋1で毎回計算し直すので、挿入・複製・並べ替えのあとに振り直す作業は要りません（複製した行のCNOは空欄になります）。CNOを入れた行は、その値のまま出力します。</p>
   <ul>
     <li><code>&#8593;+</code> 上に挿入 ／ <code>&#8595;+</code> 下に挿入 <span style="color:var(--ink3)">— Ctrl+Enter で下に、Ctrl+Shift+Enter で上に</span></li>
     <li><code>&#10697;</code> 複製 <span style="color:var(--ink3)">— Ctrl+D。似たシナリオを1行だけ変えて足すとき用</span></li>
@@ -262,8 +259,8 @@ pre{
   <ul>
     <li>出力対象は<b>Commentが入っている最後の行まで</b>。それ以降の行は、数値が入っていても出力されません。</li>
     <li>途中のComment空欄行は<b>スキップされず</b><code>"Comment":""</code>として出力されます（左端に<span style="color:var(--amber)">▲</span>を表示）。</li>
-    <li>空欄の数値項目は <code>0</code> に置き換わります（<code>SNO</code>だけはSNO既定値）。</li>
-    <li><code>PRVSNO</code>は前の行の<code>SNO</code>（先頭行は自分の<code>SNO</code>）。<code>CNO</code>はSNOが変わっても連番のまま続きます。</li>
+    <li>空欄の数値項目は <code>0</code> に置き換わります（<code>SNO</code>・<code>CNO</code>は上の自動の値）。</li>
+    <li><code>PRVSNO</code>・<code>PRVCNO</code>は前の行の<code>SNO</code>・<code>CNO</code>（先頭行は自分の<code>SNO</code>と<code>CNO</code>−1）。</li>
     <li><code>ACAF</code>が空欄なら <code>CoordCorrectInfo</code> は <code>{}</code> になります。</li>
     <li>改行コードはCRLF、文字コードはBOM付きUTF-8。</li>
   </ul>
@@ -273,8 +270,10 @@ pre{
 </div>
 <div class="toast" id="toast"></div>
 
-<script>
-(function(){
+<script id="core">
+/* ---------- 画面に依存しない処理 ----------
+   test/core.test.js がこのブロックだけを取り出してテストする */
+var JsonNumberingCore = (function(){
 "use strict";
 
 var GROUPS = [
@@ -283,23 +282,171 @@ var GROUPS = [
   {name:"SwitchInfo",        cols:["SCJFN","SCT","SCD","SCR","SCC","SCV","SCX","SCY"]},
   {name:"CoordCorrectInfo",  cols:["ACAF","CAPX","CAPY","CAPR"]}
 ];
-var LEAD = ["SNO"];  // 左端の固定列に置く入力
-var COLS = LEAD.concat(GROUPS.reduce(function(a,g){return a.concat(g.cols)},[])); // 21列
+var LEAD = ["SNO","CNO"];  // 左端の固定列に置く入力
+var COLS = LEAD.concat(GROUPS.reduce(function(a,g){return a.concat(g.cols)},[])); // 22列
 var NCOL = COLS.length;
 var CI = {};  // 列名 → 列番号
 COLS.forEach(function(n,i){ CI[n]=i; });
 var G = {};   // グループ名 → 列名
 GROUPS.forEach(function(g){ G[g.name]=g.cols; });
+var NUMRE=/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+
+function blankRow(){ var r=[]; for(var i=0;i<NCOL;i++) r.push(""); return r; }
+function str(v){ return v==null ? "" : String(v); }
+function num(v){
+  var s=str(v).trim();
+  return s==="" ? "0" : s;
+}
+function esc(s){
+  return String(s).replace(/\\/g,"\\\\").replace(/"/g,'\\"')
+                  .replace(/\r/g,"\\r").replace(/\n/g,"\\n").replace(/\t/g,"\\t");
+}
+// lastRow = Cells(Rows.Count,1).End(xlUp).Row 相当
+function lastCommentIndex(rows){
+  for(var r=rows.length-1;r>=0;r--){ if(str(rows[r][CI.Comment]).trim()!=="") return r; }
+  return -1;
+}
+function activeRows(rows){
+  var last=lastCommentIndex(rows);
+  return last<0 ? [] : rows.slice(0,last+1);
+}
+
+// 出力する行ごとに SNO/CNO/PRVSNO/PRVCNO を決める
+//   SNO が空欄 → SNO既定値
+//   CNO が空欄 → 前の行のCNO+1（先頭行はCNO開始番号）
+//   PRVSNO/PRVCNO → 前の行の SNO/CNO（先頭行は自分のSNO と CNO-1）
+function resolve(rows, opts){
+  var items=[], next=opts.startCno;
+  activeRows(rows).forEach(function(row,i){
+    var s=str(row[CI.SNO]).trim(), c=str(row[CI.CNO]).trim();
+    var sno = s==="" ? String(opts.defaultSno) : s;
+    var cno = c==="" ? String(next) : c;
+    var cnoNum = NUMRE.test(cno) ? Number(cno) : next;
+    var prev = items[i-1];
+    items.push({
+      row:row, sno:sno, cno:cno,
+      prvsno: prev ? prev.sno : sno,
+      prvcno: prev ? prev.cno : String(cnoNum-1)
+    });
+    next = cnoNum+1;
+  });
+  return items;
+}
+function fields(row,names){
+  return names.map(function(n){ return '"'+n+'":'+num(row[CI[n]]); }).join(",");
+}
+// opts: {defaultSno, startCno, escape}
+function buildJson(rows, opts){
+  var parts = resolve(rows,opts).map(function(it){
+    var row=it.row, cmt=str(row[CI.Comment]);
+    var s="{";
+    s+='"Comment":"'+(opts.escape?esc(cmt):cmt)+'",\r\n';
+    s+='    "SNO":'+it.sno+',"CNO":'+it.cno+',"PRVSNO":'+it.prvsno+',"PRVCNO":'+it.prvcno+',\r\n';
+    s+='    "RunInfo":{'+fields(row,G.RunInfo)+'},\r\n';
+    s+='    "SwitchInfo":{'+fields(row,G.SwitchInfo)+'},\r\n';
+    if(str(row[CI.ACAF]).trim()===""){
+      s+='    "CoordCorrectInfo":{}\r\n';
+    }else{
+      s+='    "CoordCorrectInfo":{'+fields(row,G.CoordCorrectInfo)+'}\r\n';
+    }
+    s+="}";
+    return s;
+  });
+  return "[\r\n"+parts.join(",\r\n")+"\r\n]";
+}
+// 同じ SNO・CNO の組が2回以上出てくるもの
+function duplicates(items){
+  var seen={}, dup=[];
+  items.forEach(function(it){
+    var k="SNO "+it.sno+" CNO "+it.cno;
+    if(seen[k] && dup.indexOf(k)<0) dup.push(k);
+    seen[k]=true;
+  });
+  return dup;
+}
+
+function isJson(text){ return /^\s*\[/.test(str(text).replace(/^\uFEFF/,"")); }
+// command.json（このツールやマクロの出力）を表の行に戻す。読めなければ例外
+// SNO・CNO はファイルの値のまま。PRVSNO・PRVCNO は出力時に前の行から計算し直す
+function parseJson(text){
+  var list=JSON.parse(str(text).replace(/^\uFEFF/,""));
+  if(!Array.isArray(list)) throw new Error("先頭が [ の配列ではありません");
+  var prvMismatch=0;
+  var rows=list.map(function(item,i){
+    item=item||{};
+    var r=blankRow();
+    r[CI.SNO]=str(item.SNO);
+    r[CI.CNO]=str(item.CNO);
+    r[CI.Comment]=str(item.Comment);
+    ["RunInfo","SwitchInfo","CoordCorrectInfo"].forEach(function(g){
+      var o=item[g]||{};
+      G[g].forEach(function(n){ r[CI[n]]=str(o[n]); });
+    });
+    var prev=list[i-1]||{};
+    var wantSno = i>0 ? str(prev.SNO) : str(item.SNO);
+    var wantCno = i>0 ? str(prev.CNO) : str(Number(item.CNO)-1);
+    if(str(item.PRVSNO)!==wantSno || str(item.PRVCNO)!==wantCno) prvMismatch++;
+    return r;
+  });
+  var start=list.length ? parseInt(list[0].CNO,10) : NaN;
+  return {
+    rows: rows,
+    startCno: isNaN(start) ? null : start,
+    prvMismatch: prvMismatch,                          // PRVSNO・PRVCNO が前の行と合わない件数
+    trailingBlank: rows.length-1-lastCommentIndex(rows)  // 末尾のCommentが空で出力されない件数
+  };
+}
+// TSV/CSV を表の行に戻す。見出し行があれば列名で対応付ける（SNO・CNO列の無い旧形式も読める）
+function parseTable(text){
+  var txt=str(text).replace(/^\uFEFF/,"");
+  var sep = txt.indexOf("\t")>=0 ? "\t" : ",";
+  var lines=txt.replace(/\r\n?/g,"\n").replace(/\n+$/,"").split("\n");
+  var map=COLS.map(function(_,c){ return c; });
+  var head=lines[0].split(sep).map(function(s){ return s.trim(); });
+  if(head.indexOf("Comment")>=0){
+    lines.shift();
+    map=COLS.map(function(n){ return head.indexOf(n); });
+  }
+  return lines.map(function(line){
+    var cells=line.split(sep), r=blankRow();
+    for(var c=0;c<NCOL;c++) r[c]= map[c]<0 ? "" : (cells[map[c]]||"").trim();
+    return r;
+  });
+}
+function toTsv(rows){
+  return COLS.join("\t")+"\r\n"+rows.map(function(r){ return r.join("\t"); }).join("\r\n");
+}
+
+return {
+  GROUPS:GROUPS, LEAD:LEAD, COLS:COLS, NCOL:NCOL, CI:CI, G:G, NUMRE:NUMRE,
+  blankRow:blankRow, lastCommentIndex:lastCommentIndex, activeRows:activeRows,
+  resolve:resolve, buildJson:buildJson, duplicates:duplicates,
+  isJson:isJson, parseJson:parseJson, parseTable:parseTable, toTsv:toTsv
+};
+})();
+</script>
+
+<script>
+(function(){
+"use strict";
+
+var C = JsonNumberingCore;
+var GROUPS=C.GROUPS, LEAD=C.LEAD, COLS=C.COLS, NCOL=C.NCOL, CI=C.CI, NUMRE=C.NUMRE, blankRow=C.blankRow;
 var INITIAL_ROWS = 12;
 
 var rows = [];
-function blankRow(){ var r=[]; for(var i=0;i<NCOL;i++) r.push(""); return r; }
 for (var i=0;i<INITIAL_ROWS;i++) rows.push(blankRow());
+var loadNotes = [];  // 読込時の注意（次の読込か全消去まで表示）
 
 var $ = function(id){ return document.getElementById(id); };
 var body=$("body"), preview=$("preview"), msgs=$("msgs"), countEl=$("count");
 var startCnoEl=$("startCno"), snoEl=$("sno"), optBom=$("optBom"), optEsc=$("optEsc");
 function getSno(){ var v=parseInt(snoEl.value,10); return isNaN(v) ? 99 : v; }
+function opts(){
+  var start=parseInt(startCnoEl.value,10);
+  return {defaultSno:getSno(), startCno:(isNaN(start) ? 1 : start), escape:optEsc.checked};
+}
+function buildJson(){ return C.buildJson(rows, opts()); }
 
 /* ---------- ヘッダ ---------- */
 (function buildHead(){
@@ -313,13 +460,12 @@ function getSno(){ var v=parseInt(snoEl.value,10); return isNaN(v) ? 99 : v; }
     if(gi>0) th.className="grp";
     g.appendChild(th);
   });
-  var k=0;
   GROUPS.forEach(function(grp,gi){
     grp.cols.forEach(function(name,ci){
       var th=document.createElement("th");
       th.textContent=name;
       if(gi>0&&ci===0) th.className="grp";
-      c.appendChild(th); k++;
+      c.appendChild(th);
     });
   });
 })();
@@ -333,7 +479,7 @@ function renderGrid(focus){
     var gut=document.createElement("td");
     gut.className="gut";
     gut.innerHTML='<div class="chain"><span class="idx"></span>'+
-                  '<input type="text" class="sno"><span class="lnk cno"></span>'+
+                  '<input type="text" class="sno"><input type="text" class="cno">'+
                   '<span class="warn" title="Commentが空のまま出力されます" hidden>&#9650;</span>'+
                   '<span class="acts">'+
                     '<button type="button" data-act="above" title="この行の上に挿入">&#8593;&#43;</button>'+
@@ -343,11 +489,12 @@ function renderGrid(focus){
                     '<button type="button" data-act="down"  title="1行下へ移動 (Alt+&#8595;)">&#9660;</button>'+
                     '<button type="button" data-act="del"   title="この行を削除">&times;</button>'+
                   '</span></div>';
-    var sno=gut.querySelector("input.sno");
-    sno.value=row[CI.SNO];
-    sno.placeholder=String(getSno());
-    sno.dataset.r=r; sno.dataset.c=CI.SNO;
-    sno.setAttribute("aria-label", "SNO 行"+(r+1));
+    LEAD.forEach(function(name){
+      var inp=gut.querySelector("input."+name.toLowerCase());
+      inp.value=row[CI[name]];
+      inp.dataset.r=r; inp.dataset.c=CI[name];
+      inp.setAttribute("aria-label", name+" 行"+(r+1));
+    });
     tr.appendChild(gut);
     var gi=0, ci=0;
     for(var c2=LEAD.length;c2<NCOL;c2++){
@@ -385,7 +532,9 @@ function insertAt(r){
   toast((r+1)+"行目に挿入しました");
 }
 function duplicateAt(r){
-  rows.splice(r+1,0,rows[r].slice());
+  var copy=rows[r].slice();
+  copy[CI.CNO]="";  // 複製した行のCNOは前の行＋1で振る
+  rows.splice(r+1,0,copy);
   renderGrid({r:r+1,c:CI.Comment,select:true});
   toast((r+1)+"行目を複製しました");
 }
@@ -402,102 +551,51 @@ function deleteAt(r){
   renderGrid({r:Math.min(r,rows.length-1),c:CI.Comment});
 }
 
-/* ---------- マクロ再現ロジック ---------- */
-function num(v){
-  var s = (v==null?"":String(v)).trim();
-  return s==="" ? "0" : s;
-}
-function esc(s){
-  return String(s).replace(/\\/g,"\\\\").replace(/"/g,'\\"')
-                  .replace(/\r/g,"\\r").replace(/\n/g,"\\n").replace(/\t/g,"\\t");
-}
-// lastRow = Cells(Rows.Count,1).End(xlUp).Row 相当
-function lastCommentIndex(){
-  for(var r=rows.length-1;r>=0;r--){ if(String(rows[r][CI.Comment]).trim()!=="") return r; }
-  return -1;
-}
-function activeRows(){
-  var last=lastCommentIndex();
-  return last<0 ? [] : rows.slice(0,last+1);
-}
-// 明細のSNO。空欄ならSNO既定値
-function rowSno(row){
-  var s=String(row[CI.SNO]).trim();
-  return s==="" ? String(getSno()) : s;
-}
-function fields(row,names){
-  return names.map(function(n){ return '"'+n+'":'+num(row[CI[n]]); }).join(",");
-}
-function buildJson(){
-  var start = parseInt(startCnoEl.value,10); if(isNaN(start)) start=1;
-  var doEsc = optEsc.checked;
-  var act = activeRows();
-  var parts = act.map(function(row,i){
-    var cno=start+i, prv=cno-1;
-    var sno=rowSno(row), prvsno=(i>0 ? rowSno(act[i-1]) : sno);
-    var cmt=row[CI.Comment];
-    var s="{";
-    s+='"Comment":"'+(doEsc?esc(cmt):cmt)+'",\r\n';
-    s+='    "SNO":'+sno+',"CNO":'+cno+',"PRVSNO":'+prvsno+',"PRVCNO":'+prv+',\r\n';
-    s+='    "RunInfo":{'+fields(row,G.RunInfo)+'},\r\n';
-    s+='    "SwitchInfo":{'+fields(row,G.SwitchInfo)+'},\r\n';
-    if(String(row[CI.ACAF]).trim()===""){
-      s+='    "CoordCorrectInfo":{}\r\n';
-    }else{
-      s+='    "CoordCorrectInfo":{'+fields(row,G.CoordCorrectInfo)+'}\r\n';
-    }
-    s+="}";
-    return s;
-  });
-  return "[\r\n"+parts.join(",\r\n")+"\r\n]";
-}
-
 /* ---------- 表示更新 ---------- */
-var NUMRE=/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
 function refresh(){
-  var start=parseInt(startCnoEl.value,10); if(isNaN(start)) start=1;
-  var last=lastCommentIndex();
+  var o=opts();
+  var items=C.resolve(rows,o);
   var trs=body.children;
   for(var r=0;r<trs.length;r++){
-    var tr=trs[r], active = (last>=0 && r<=last);
-    var idx=tr.querySelector(".idx"), cnoEl=tr.querySelector(".cno"), warn=tr.querySelector(".warn");
+    var tr=trs[r], it=items[r], active=!!it;
+    var idx=tr.querySelector(".idx"), warn=tr.querySelector(".warn");
+    var inps=tr.querySelectorAll("input");
+    var cnoIn=inps[CI.CNO];
     idx.textContent=String(r+1);
+    inps[CI.SNO].placeholder=String(o.defaultSno);
+    tr.classList.toggle("ghost", !active);
     if(active){
-      var cno=start+r;
-      tr.classList.remove("ghost");
-      cnoEl.textContent=String(cno);
-      cnoEl.title="PRVSNO "+rowSno(rows[r>0 ? r-1 : r])+" / PRVCNO "+(cno-1);
+      cnoIn.placeholder=it.cno;
+      cnoIn.title="PRVSNO "+it.prvsno+" / PRVCNO "+it.prvcno;
       warn.hidden = String(rows[r][CI.Comment]).trim()!=="";
     }else{
-      tr.classList.add("ghost");
-      cnoEl.textContent="—";
-      cnoEl.title="出力対象外";
+      cnoIn.placeholder="—";
+      cnoIn.title="出力対象外";
       warn.hidden=true;
     }
-    var inps=tr.querySelectorAll("input");
-    inps[CI.SNO].placeholder=String(getSno());
     for(var c=0;c<NCOL;c++){
       if(c===CI.Comment) continue;
       var v=String(rows[r][c]).trim();
       inps[c].classList.toggle("bad", active && v!=="" && !NUMRE.test(v));
     }
   }
-  var act=activeRows();
   var snos=[];
-  act.forEach(function(row){ var s=rowSno(row); if(snos.indexOf(s)<0) snos.push(s); });
+  items.forEach(function(it){ if(snos.indexOf(it.sno)<0) snos.push(it.sno); });
   var snoText = snos.length>5 ? snos.slice(0,5).join(", ")+" ほか"+(snos.length-5)+"種" : snos.join(", ");
-  countEl.textContent = act.length ? act.length+" シナリオ / SNO "+snoText+" / CNO "+start+"–"+(start+act.length-1) : "出力対象なし";
-  preview.textContent = buildJson().replace(/\r\n/g,"\n");
-  renderMsgs(act,last);
+  countEl.textContent = items.length ?
+    items.length+" シナリオ / SNO "+snoText+" / CNO "+items[0].cno+"–"+items[items.length-1].cno : "出力対象なし";
+  preview.textContent = C.buildJson(rows,o).replace(/\r\n/g,"\n");
+  renderMsgs(items);
 }
 
-function renderMsgs(act,last){
-  var out=[];
-  if(!act.length){
+function renderMsgs(items){
+  var out=loadNotes.map(function(m){ return ["warn","読込時の注意："+m]; });
+  if(!items.length){
     out.push(["warn","Commentが1行も入っていません。Commentを入れた行までが出力対象です。"]);
   }
   var blanks=0, bads=[], quoted=0;
-  act.forEach(function(row,i){
+  items.forEach(function(it,i){
+    var row=it.row;
     if(String(row[CI.Comment]).trim()==="") blanks++;
     if(!optEsc.checked && /["\\]/.test(String(row[CI.Comment]))) quoted++;
     for(var c=0;c<NCOL;c++){
@@ -509,6 +607,8 @@ function renderMsgs(act,last){
   if(blanks) out.push(["warn",blanks+"行のCommentが空です。マクロと同じく、この行も \"Comment\":\"\" として出力されます。"]);
   if(quoted) out.push(["err","Commentに \" か \\ が含まれています。このままではJSONとして壊れます。「Commentをエスケープ」を有効にしてください。"]);
   if(bads.length) out.push(["err","数値以外が入っています（"+bads.slice(0,6).join("、")+(bads.length>6?" ほか"+(bads.length-6)+"件":"")+"）。JSONとして壊れます。"]);
+  var dup=C.duplicates(items);
+  if(dup.length) out.push(["warn","SNO・CNOの組が重複しています（"+dup.slice(0,4).join("、")+(dup.length>4?" ほか"+(dup.length-4)+"件":"")+"）。"]);
   msgs.innerHTML = out.map(function(m){
     var d=document.createElement("div"); d.className="msg "+m[0]; d.textContent=m[1];
     return d.outerHTML;
@@ -597,6 +697,7 @@ $("btnAdd5").onclick=function(){addRows(5)};
 $("btnClear").onclick=function(){
   if(!confirm("入力内容をすべて消します。よろしいですか？")) return;
   rows=[]; for(var i=0;i<INITIAL_ROWS;i++) rows.push(blankRow());
+  loadNotes=[];
   renderGrid(); toast("消去しました");
 };
 
@@ -608,7 +709,7 @@ function download(name, text, bom, mime){
   setTimeout(function(){URL.revokeObjectURL(url)},1500);
 }
 $("btnDownload").onclick=function(){
-  if(!activeRows().length){ toast("Commentを1行以上入れてください"); return; }
+  if(!C.activeRows(rows).length){ toast("Commentを1行以上入れてください"); return; }
   download("command.json", buildJson(), optBom.checked, "application/json");
   toast("command.json を保存しました");
 };
@@ -619,33 +720,21 @@ $("btnCopy").onclick=function(){
   );
 };
 $("btnSaveTsv").onclick=function(){
-  var body_ = rows.map(function(r){return r.join("\t")}).join("\r\n");
-  download("data.tsv", COLS.join("\t")+"\r\n"+body_, true, "text/tab-separated-values");
+  download("data.tsv", C.toTsv(rows), true, "text/tab-separated-values");
   toast("data.tsv を保存しました");
 };
-// command.json\uFF08\u3053\u306E\u30C4\u30FC\u30EB\u3084\u30DE\u30AF\u30ED\u306E\u51FA\u529B\uFF09\u3092\u8868\u306B\u623B\u3059
+
 function loadJson(txt){
-  var list;
-  try{ list=JSON.parse(txt); }
-  catch(err){ toast("JSON\u3068\u3057\u3066\u8AAD\u3081\u307E\u305B\u3093\u3067\u3057\u305F\uFF08"+err.message+"\uFF09"); return; }
-  if(!Array.isArray(list)){ toast("JSON\u306E\u5F62\u5F0F\u304C\u9055\u3044\u307E\u3059\uFF08\u5148\u982D\u304C [ \u306E\u914D\u5217\u3067\u306F\u3042\u308A\u307E\u305B\u3093\uFF09"); return; }
-  function str(v){ return v==null ? "" : String(v); }
-  var start=list.length ? parseInt(list[0].CNO,10) : NaN, renum=false;
-  rows=list.map(function(item,i){
-    var r=blankRow(); item=item||{};
-    r[CI.SNO]=str(item.SNO);
-    r[CI.Comment]=str(item.Comment);
-    ["RunInfo","SwitchInfo","CoordCorrectInfo"].forEach(function(g){
-      var o=item[g]||{};
-      G[g].forEach(function(n){ r[CI[n]]=str(o[n]); });
-    });
-    if(item.CNO!==start+i) renum=true;
-    return r;
-  });
-  if(!rows.length) rows.push(blankRow());
-  if(!isNaN(start)) startCnoEl.value=start;
+  var res;
+  try{ res=C.parseJson(txt); }
+  catch(err){ toast("JSONとして読めませんでした（"+err.message+"）"); return; }
+  rows = res.rows.length ? res.rows : [blankRow()];
+  if(res.startCno!=null) startCnoEl.value=res.startCno;
+  loadNotes=[];
+  if(res.prvMismatch) loadNotes.push("PRVSNO・PRVCNOが前の行のSNO・CNOと合わない行が"+res.prvMismatch+"件あります。出力では前の行から計算し直します。");
+  if(res.trailingBlank) loadNotes.push("末尾のCommentが空の"+res.trailingBlank+"件は出力されません。");
   renderGrid();
-  toast(list.length+"\u4EF6\u306EJSON\u3092\u8AAD\u307F\u8FBC\u307F\u307E\u3057\u305F"+(renum?"\uFF08CNO\u306F\u9023\u756A\u306B\u632F\u308A\u76F4\u3057\u3066\u3044\u307E\u3059\uFF09":""));
+  toast(res.rows.length+"件のJSONを読み込みました");
 }
 
 $("btnLoadTsv").onclick=function(){ $("fileTsv").click() };
@@ -653,23 +742,11 @@ $("fileTsv").onchange=function(e){
   var f=e.target.files[0]; if(!f) return;
   var fr=new FileReader();
   fr.onload=function(){
-    var txt=String(fr.result).replace(/^\uFEFF/,"");
-    if(/^\s*\[/.test(txt)){ loadJson(txt); return; }
-    var sep = txt.indexOf("\t")>=0 ? "\t" : ",";
-    var lines=txt.replace(/\r\n?/g,"\n").replace(/\n+$/,"").split("\n");
-    var map=COLS.map(function(_,c){ return c; });
-    var head=lines.length ? lines[0].split(sep).map(function(s){ return s.trim(); }) : [];
-    if(head.indexOf("Comment")>=0){
-      // 見出し行があれば列名で対応付ける（SNO列の無い旧形式もそのまま読める）
-      lines.shift();
-      map=COLS.map(function(n){ return head.indexOf(n); });
-    }
-    rows=lines.map(function(line){
-      var cells=line.split(sep), r=blankRow();
-      for(var c=0;c<NCOL;c++) r[c]= map[c]<0 ? "" : (cells[map[c]]||"").trim();
-      return r;
-    });
+    var txt=String(fr.result);
+    if(C.isJson(txt)){ loadJson(txt); return; }
+    rows=C.parseTable(txt);
     if(!rows.length) rows.push(blankRow());
+    loadNotes=[];
     renderGrid(); toast(rows.length+"行を読み込みました");
   };
   fr.readAsText(f,"utf-8");
