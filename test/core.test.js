@@ -55,6 +55,36 @@ describe("command.json の読込と出力", () => {
     assert.equal(norm(roundTrip(original)), norm(original));
   });
 
+  test("SCRIPT・JMPSNO を含むファイル（fixtures/command_sno_routes.json）を読み込んで出力すると一致する", () => {
+    const text = readText("test/fixtures/command_sno_routes.json");
+    const res = C.parseJson(text);
+    assert.equal(res.rows.length, 73);
+    assert.equal(res.prvMismatch, 0);
+    assert.equal(res.trailingBlank, 0);
+    assert.deepEqual(res.unknownKeys, []);
+    assert.equal(norm(roundTrip(text)), norm(text));
+  });
+
+  test("SCRIPT・JMPSNO は値のある行だけ、SCRIPTはRunInfoの先頭・JMPSNOはSwitchInfoの末尾に出力する", () => {
+    const a = item(1, 1, 1, 0), b = item(1, 2, 1, 1);
+    b.RunInfo = { SCRIPT: 'dir\\a "b".py', ...b.RunInfo };
+    b.SwitchInfo.JMPSNO = 22;
+    const out = JSON.parse(roundTrip(JSON.stringify([a, b])));
+    assert.deepEqual(Object.keys(out[0].RunInfo), ["FUNCNO", "FWD", "TRN", "KP", "KI", "KD", "NOBLNCE"]);
+    assert.deepEqual(Object.keys(out[0].SwitchInfo), ["SCJFN", "SCT", "SCD", "SCR", "SCC", "SCV", "SCX", "SCY"]);
+    assert.equal(Object.keys(out[1].RunInfo)[0], "SCRIPT");
+    assert.equal(out[1].RunInfo.SCRIPT, 'dir\\a "b".py');
+    assert.equal(Object.keys(out[1].SwitchInfo).at(-1), "JMPSNO");
+    assert.equal(out[1].SwitchInfo.JMPSNO, 22);
+  });
+
+  test("画面に無い項目は unknownKeys で返す", () => {
+    const o = item(1, 1, 1, 0);
+    o.EXTRA = 1;
+    o.RunInfo.SPEED = 3;
+    assert.deepEqual(C.parseJson(JSON.stringify([o])).unknownKeys, ["EXTRA", "RunInfo.SPEED"]);
+  });
+
   test("出力の改行コードはCRLF", () => {
     assert.doesNotMatch(roundTrip(original), /[^\r]\n/);
   });
@@ -168,7 +198,7 @@ describe("TSV/CSV の読込と保存", () => {
   });
 
   test("入力を保存（TSV）した内容を読み込むと元の表に戻る", () => {
-    const rows = [row({ SNO: 3, CNO: 7, Comment: "a", FUNCNO: 2, KP: 3.6 }), row({ Comment: "b", ACAF: 1 })];
+    const rows = [row({ SNO: 3, CNO: 7, Comment: "a", FUNCNO: 2, KP: 3.6, SCRIPT: "x.py" }), row({ Comment: "b", ACAF: 1, JMPSNO: 29 })];
     assert.deepEqual(C.parseTable(C.toTsv(rows)), rows);
   });
 

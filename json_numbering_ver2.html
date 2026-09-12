@@ -103,6 +103,7 @@ tbody input{
 tbody input:focus{outline:2px solid var(--blue);outline-offset:-2px;background:var(--blue-soft)}
 tbody input.cmt{width:190px}
 tbody input.n{width:74px;text-align:right}
+tbody input.txt{width:220px}
 tbody input::placeholder{color:var(--ink3)}
 tbody input.bad{background:var(--red-soft);color:var(--red)}
 tbody tr.ghost input{color:var(--ink3)}
@@ -245,7 +246,7 @@ pre{
     <li>SNO既定値とCNO開始番号を入れる。明細の<code>SNO</code>・<code>CNO</code>が空欄の行は自動で決まります（SNOは既定値、CNOは前の行＋1。先頭行はCNO開始番号）。</li>
     <li>「command.json を保存」を押す。</li>
   </ol>
-  <p>作成済みの <code>command.json</code> も「ファイルから読込」で読み込めます。SNO・CNOは読み込んだ値のまま各行に入ります。<code>PRVSNO</code>・<code>PRVCNO</code>は出力時に前の行から計算し直すので、ファイルの値と合わない行があれば読込時にお知らせします。</p>
+  <p>作成済みの <code>command.json</code> も「ファイルから読込」で読み込めます。SNO・CNOは読み込んだ値のまま各行に入ります。<code>PRVSNO</code>・<code>PRVCNO</code>は出力時に前の行から計算し直すので、ファイルの値と合わない行や、画面に無い項目があれば読込時にお知らせします。</p>
   <h3 style="margin-top:14px">行の操作</h3>
   <p>各行の左端にボタンがあります（行にカーソルを置くか、マウスを乗せると濃くなります）。CNOが空欄の行は前の行＋1で毎回計算し直すので、挿入・複製・並べ替えのあとに振り直す作業は要りません（複製した行のCNOは空欄になります）。CNOを入れた行は、その値のまま出力します。</p>
   <ul>
@@ -264,6 +265,7 @@ pre{
     <li><code>ACAF</code>が空欄なら <code>CoordCorrectInfo</code> は <code>{}</code> になります。</li>
     <li>改行コードはCRLF、文字コードはBOM付きUTF-8。</li>
   </ul>
+  <p>表の右端の「任意項目」も元マクロには無い追加分です。<code>SCRIPT</code>（文字列）は <code>RunInfo</code> の先頭、<code>JMPSNO</code> は <code>SwitchInfo</code> の末尾に、値を入れた行だけ出力します。空欄の行には出力しません。</p>
   <p>「Commentをエスケープ」は元マクロには無い追加分です。Commentに <code>"</code> や <code>\</code> を使うとマクロの出力はJSONとして壊れるので、必要なときだけ入れてください。</p>
 </div>
 
@@ -276,19 +278,30 @@ pre{
 var JsonNumberingCore = (function(){
 "use strict";
 
+// 画面の列。Comment から CAPR まではExcelのDataシートと同じ並びで、それ以外の項目は右端に置く
 var GROUPS = [
   {name:"基本",              cols:["Comment"]},
   {name:"RunInfo",           cols:["FUNCNO","FWD","TRN","KP","KI","KD","NOBLNCE"]},
   {name:"SwitchInfo",        cols:["SCJFN","SCT","SCD","SCR","SCC","SCV","SCX","SCY"]},
-  {name:"CoordCorrectInfo",  cols:["ACAF","CAPX","CAPY","CAPR"]}
+  {name:"CoordCorrectInfo",  cols:["ACAF","CAPX","CAPY","CAPR"]},
+  {name:"任意項目",           cols:["SCRIPT","JMPSNO"]}
 ];
+// 出力するJSONの項目と並び
+var SECTIONS = [
+  {name:"RunInfo",           keys:["SCRIPT","FUNCNO","FWD","TRN","KP","KI","KD","NOBLNCE"]},
+  {name:"SwitchInfo",        keys:["SCJFN","SCT","SCD","SCR","SCC","SCV","SCX","SCY","JMPSNO"]},
+  {name:"CoordCorrectInfo",  keys:["ACAF","CAPX","CAPY","CAPR"]}
+];
+var OPTIONAL = {SCRIPT:true, JMPSNO:true};  // 空欄なら出力しない
+var TEXT = {Comment:true, SCRIPT:true};     // 数値ではなく文字列の項目
+var TOP = ["Comment","SNO","CNO","PRVSNO","PRVCNO"].concat(SECTIONS.map(function(s){ return s.name; }));
 var LEAD = ["SNO","CNO"];  // 左端の固定列に置く入力
-var COLS = LEAD.concat(GROUPS.reduce(function(a,g){return a.concat(g.cols)},[])); // 22列
+var COLS = LEAD.concat(GROUPS.reduce(function(a,g){return a.concat(g.cols)},[])); // 24列
 var NCOL = COLS.length;
 var CI = {};  // 列名 → 列番号
 COLS.forEach(function(n,i){ CI[n]=i; });
-var G = {};   // グループ名 → 列名
-GROUPS.forEach(function(g){ G[g.name]=g.cols; });
+var S = {};   // 出力の区分名 → 項目名
+SECTIONS.forEach(function(s){ S[s.name]=s.keys; });
 var NUMRE=/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
 
 function blankRow(){ var r=[]; for(var i=0;i<NCOL;i++) r.push(""); return r; }
@@ -332,8 +345,12 @@ function resolve(rows, opts){
   });
   return items;
 }
-function fields(row,names){
-  return names.map(function(n){ return '"'+n+'":'+num(row[CI[n]]); }).join(",");
+function fields(row,keys){
+  return keys.filter(function(n){ return !(OPTIONAL[n] && str(row[CI[n]]).trim()===""); })
+    .map(function(n){
+      var v=str(row[CI[n]]).trim();
+      return '"'+n+'":'+(TEXT[n] ? '"'+esc(v)+'"' : num(v));
+    }).join(",");
 }
 // opts: {defaultSno, startCno, escape}
 function buildJson(rows, opts){
@@ -342,12 +359,12 @@ function buildJson(rows, opts){
     var s="{";
     s+='"Comment":"'+(opts.escape?esc(cmt):cmt)+'",\r\n';
     s+='    "SNO":'+it.sno+',"CNO":'+it.cno+',"PRVSNO":'+it.prvsno+',"PRVCNO":'+it.prvcno+',\r\n';
-    s+='    "RunInfo":{'+fields(row,G.RunInfo)+'},\r\n';
-    s+='    "SwitchInfo":{'+fields(row,G.SwitchInfo)+'},\r\n';
+    s+='    "RunInfo":{'+fields(row,S.RunInfo)+'},\r\n';
+    s+='    "SwitchInfo":{'+fields(row,S.SwitchInfo)+'},\r\n';
     if(str(row[CI.ACAF]).trim()===""){
       s+='    "CoordCorrectInfo":{}\r\n';
     }else{
-      s+='    "CoordCorrectInfo":{'+fields(row,G.CoordCorrectInfo)+'}\r\n';
+      s+='    "CoordCorrectInfo":{'+fields(row,S.CoordCorrectInfo)+'}\r\n';
     }
     s+="}";
     return s;
@@ -371,16 +388,19 @@ function isJson(text){ return /^\s*\[/.test(str(text).replace(/^\uFEFF/,"")); }
 function parseJson(text){
   var list=JSON.parse(str(text).replace(/^\uFEFF/,""));
   if(!Array.isArray(list)) throw new Error("先頭が [ の配列ではありません");
-  var prvMismatch=0;
+  var prvMismatch=0, unknown=[];
+  function note(k){ if(unknown.indexOf(k)<0) unknown.push(k); }
   var rows=list.map(function(item,i){
     item=item||{};
     var r=blankRow();
     r[CI.SNO]=str(item.SNO);
     r[CI.CNO]=str(item.CNO);
     r[CI.Comment]=str(item.Comment);
-    ["RunInfo","SwitchInfo","CoordCorrectInfo"].forEach(function(g){
-      var o=item[g]||{};
-      G[g].forEach(function(n){ r[CI[n]]=str(o[n]); });
+    Object.keys(item).forEach(function(k){ if(TOP.indexOf(k)<0) note(k); });
+    SECTIONS.forEach(function(sec){
+      var o=item[sec.name]||{};
+      sec.keys.forEach(function(n){ r[CI[n]]=str(o[n]); });
+      Object.keys(o).forEach(function(k){ if(sec.keys.indexOf(k)<0) note(sec.name+"."+k); });
     });
     var prev=list[i-1]||{};
     var wantSno = i>0 ? str(prev.SNO) : str(item.SNO);
@@ -392,8 +412,9 @@ function parseJson(text){
   return {
     rows: rows,
     startCno: isNaN(start) ? null : start,
-    prvMismatch: prvMismatch,                          // PRVSNO・PRVCNO が前の行と合わない件数
-    trailingBlank: rows.length-1-lastCommentIndex(rows)  // 末尾のCommentが空で出力されない件数
+    prvMismatch: prvMismatch,                           // PRVSNO・PRVCNO が前の行と合わない件数
+    trailingBlank: rows.length-1-lastCommentIndex(rows), // 末尾のCommentが空で出力されない件数
+    unknownKeys: unknown                                // 画面に無く、出力されない項目
   };
 }
 // TSV/CSV を表の行に戻す。見出し行があれば列名で対応付ける（SNO・CNO列の無い旧形式も読める）
@@ -418,7 +439,7 @@ function toTsv(rows){
 }
 
 return {
-  GROUPS:GROUPS, LEAD:LEAD, COLS:COLS, NCOL:NCOL, CI:CI, G:G, NUMRE:NUMRE,
+  GROUPS:GROUPS, SECTIONS:SECTIONS, TEXT:TEXT, LEAD:LEAD, COLS:COLS, NCOL:NCOL, CI:CI, NUMRE:NUMRE,
   blankRow:blankRow, lastCommentIndex:lastCommentIndex, activeRows:activeRows,
   resolve:resolve, buildJson:buildJson, duplicates:duplicates,
   isJson:isJson, parseJson:parseJson, parseTable:parseTable, toTsv:toTsv
@@ -431,7 +452,7 @@ return {
 "use strict";
 
 var C = JsonNumberingCore;
-var GROUPS=C.GROUPS, LEAD=C.LEAD, COLS=C.COLS, NCOL=C.NCOL, CI=C.CI, NUMRE=C.NUMRE, blankRow=C.blankRow;
+var GROUPS=C.GROUPS, TEXT=C.TEXT, LEAD=C.LEAD, COLS=C.COLS, NCOL=C.NCOL, CI=C.CI, NUMRE=C.NUMRE, blankRow=C.blankRow;
 var INITIAL_ROWS = 12;
 
 var rows = [];
@@ -502,7 +523,7 @@ function renderGrid(focus){
       if(ci===0&&gi>0) td.className="grp";
       var inp=document.createElement("input");
       inp.type="text";
-      inp.className = (c2===CI.Comment?"cmt":"n");
+      inp.className = c2===CI.Comment ? "cmt" : (TEXT[COLS[c2]] ? "txt" : "n");
       inp.value=row[c2];
       inp.dataset.r=r; inp.dataset.c=c2;
       inp.setAttribute("aria-label", COLS[c2]+" 行"+(r+1));
@@ -574,7 +595,7 @@ function refresh(){
       warn.hidden=true;
     }
     for(var c=0;c<NCOL;c++){
-      if(c===CI.Comment) continue;
+      if(TEXT[COLS[c]]) continue;
       var v=String(rows[r][c]).trim();
       inps[c].classList.toggle("bad", active && v!=="" && !NUMRE.test(v));
     }
@@ -582,8 +603,9 @@ function refresh(){
   var snos=[];
   items.forEach(function(it){ if(snos.indexOf(it.sno)<0) snos.push(it.sno); });
   var snoText = snos.length>5 ? snos.slice(0,5).join(", ")+" ほか"+(snos.length-5)+"種" : snos.join(", ");
-  countEl.textContent = items.length ?
-    items.length+" シナリオ / SNO "+snoText+" / CNO "+items[0].cno+"–"+items[items.length-1].cno : "出力対象なし";
+  // CNOの範囲は、SNOが1種類のときだけ出す（SNOごとに振り直していると範囲に意味が無いため）
+  countEl.textContent = !items.length ? "出力対象なし" :
+    items.length+" シナリオ / SNO "+snoText+(snos.length===1 ? " / CNO "+items[0].cno+"–"+items[items.length-1].cno : "");
   preview.textContent = C.buildJson(rows,o).replace(/\r\n/g,"\n");
   renderMsgs(items);
 }
@@ -599,7 +621,7 @@ function renderMsgs(items){
     if(String(row[CI.Comment]).trim()==="") blanks++;
     if(!optEsc.checked && /["\\]/.test(String(row[CI.Comment]))) quoted++;
     for(var c=0;c<NCOL;c++){
-      if(c===CI.Comment) continue;
+      if(TEXT[COLS[c]]) continue;
       var v=String(row[c]).trim();
       if(v!=="" && !NUMRE.test(v)) bads.push((i+1)+"行目 "+COLS[c]);
     }
@@ -733,6 +755,7 @@ function loadJson(txt){
   loadNotes=[];
   if(res.prvMismatch) loadNotes.push("PRVSNO・PRVCNOが前の行のSNO・CNOと合わない行が"+res.prvMismatch+"件あります。出力では前の行から計算し直します。");
   if(res.trailingBlank) loadNotes.push("末尾のCommentが空の"+res.trailingBlank+"件は出力されません。");
+  if(res.unknownKeys.length) loadNotes.push("画面に無い項目は出力されません（"+res.unknownKeys.join("、")+"）。");
   renderGrid();
   toast(res.rows.length+"件のJSONを読み込みました");
 }
